@@ -9,7 +9,7 @@ import { ensureAccessiblePalette, presetBrief, type DesignBrief } from "./brief"
 
 export async function collectReferences(db: SupabaseClient, organisationId: string, business: { id: string; industry_id: string | null; country_code: string; sector: string | null }): Promise<{ added: number; note: string }> {
   const industry = industryById(business.industry_id);
-  const creds = await getSecret(organisationId, "pinterest");
+  const creds = await getSecret(db, organisationId, "pinterest");
   if (!creds?.accessToken || !industry) return { added: 0, note: "Pinterest not connected: use manual references or the search links." };
 
   let pins: Awaited<ReturnType<typeof searchPins>> = [];

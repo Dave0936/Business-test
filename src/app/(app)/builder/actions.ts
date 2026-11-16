@@ -6,7 +6,6 @@ import { SiteContentSchema, ThemeSchema, type SiteSpec } from "@/lib/sites/spec"
 import { imageQueries } from "@/lib/sites/render";
 import { regenerateSection, resolveImages, saveVersion, SITE_ASSETS_BUCKET } from "@/lib/sites/builder";
 import { enqueue } from "@/lib/jobs/queue";
-import { createServiceClient } from "@/lib/supabase/server";
 import { writeAudit } from "@/lib/audit-log";
 import type { OrgContext } from "@/lib/auth";
 
@@ -37,7 +36,7 @@ export async function saveEdits(_p: ActionState, form: FormData): Promise<Action
       business: { ...spec.business, name: b!.name, city: b!.city, region: b!.region, countryCode: b!.country_code, phone: b!.phone, email: b!.email, address: b!.address },
       generatedBy: spec.generatedBy === "manual" ? "manual" : spec.generatedBy,
     };
-    next.images = await resolveImages(ctx.organisationId, imageQueries(next), spec.images);
+    next.images = await resolveImages(ctx.supabase, ctx.organisationId, imageQueries(next), spec.images);
     const r = await saveVersion(ctx.supabase, { organisationId: ctx.organisationId, websiteId, businessId: site.business_id, spec: next, note: str(form, "note") || "Edited in builder", actorId: ctx.user.id });
     return r.report.passed ? "Saved as a new version. Quality checks passed; it is waiting for approval." : "Saved, but quality checks failed. Fix the issues listed before it can be approved.";
   }, "/builder");
@@ -90,9 +89,9 @@ export async function regenerateSite(_p: ActionState, form: FormData): Promise<A
     const businessId = z.string().uuid().parse(str(form, "businessId"));
     const { data: b } = await ctx.supabase.from("businesses").select("id").eq("id", businessId).eq("organisation_id", ctx.organisationId).single();
     if (!b) throw new Error("Not found");
-    await enqueue(createServiceClient(), { organisationId: ctx.organisationId, type: "generate", payload: { businessId, actorId: ctx.user.id }, idempotencyKey: `generate:${businessId}:manual:${Date.now()}` });
+    await enqueue(ctx.supabase, { organisationId: ctx.organisationId, type: "generate", payload: { businessId, actorId: ctx.user.id }, idempotencyKey: `generate:${businessId}:manual:${Date.now()}` });
     await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.regenerate", entityType: "business", entityId: businessId });
-    kickWorker();
+    kickWorker(ctx);
     return "Regenerating the whole site. A new version will appear here when it’s ready.";
   }, "/builder");
 }

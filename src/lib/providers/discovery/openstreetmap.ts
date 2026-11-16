@@ -7,7 +7,8 @@ import { ProviderError, type DiscoveredBusiness, type DiscoveryProvider, type Di
  * Data © OpenStreetMap contributors, ODbL 1.0 — storage permitted with attribution.
  * Usage policy: identify the app in the User-Agent, keep request volume low.
  */
-const UA = () => `WebOpportunityAI/1.0 (${env.osmContactEmail ?? "set OSM_CONTACT_EMAIL"})`;
+// OSM policy: identify the application and give a way to contact the operator.
+const UA = () => `WebOpportunityAI/1.0 (${env.osmContactEmail ? `contact: ${env.osmContactEmail}` : `+${env.appUrl}`})`;
 
 interface OverpassElement {
   type: "node" | "way" | "relation";
@@ -56,6 +57,30 @@ export function mapOverpassElement(el: OverpassElement, q: DiscoveryQuery, categ
   };
 }
 
+/** Public Overpass instances, tried in order; the configured endpoint comes first. */
+export function overpassEndpoints(): string[] {
+  return [...new Set([env.overpassEndpoint, "https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"])];
+}
+
+async function overpass(query: string): Promise<{ elements: OverpassElement[] }> {
+  const errors: string[] = [];
+  for (const endpoint of overpassEndpoints()) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "user-agent": UA(), "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ data: query }),
+        signal: AbortSignal.timeout(40_000),
+      });
+      if (res.ok) return (await res.json()) as { elements: OverpassElement[] };
+      errors.push(`${new URL(endpoint).host}: HTTP ${res.status}`);
+    } catch (e) {
+      errors.push(`${new URL(endpoint).host}: ${(e as Error).message}`);
+    }
+  }
+  throw new ProviderError("openstreetmap", `All Overpass servers failed (${errors.join("; ")})`);
+}
+
 export const openStreetMapProvider: DiscoveryProvider = {
   id: "openstreetmap",
   label: "OpenStreetMap",
@@ -67,11 +92,13 @@ export const openStreetMapProvider: DiscoveryProvider = {
     attribution: "© OpenStreetMap contributors",
     licence: "ODbL-1.0",
   },
-  available: () => true,
   async search(q) {
     const industry = industryById(q.industryId);
     if (!industry) throw new ProviderError("openstreetmap", `Unknown industry ${q.industryId}`);
 
+    let lat = q.lat;
+    let lng = q.lng;
+    if (lat === undefined || lng === undefined) {
     const geo = new URL(env.nominatimEndpoint);
     geo.searchParams.set("format", "jsonv2");
     geo.searchParams.set("limit", "1");
@@ -81,15 +108,12 @@ export const openStreetMapProvider: DiscoveryProvider = {
     if (!geoRes.ok) throw new ProviderError("openstreetmap", `Geocoding failed (${geoRes.status})`);
     const places = (await geoRes.json()) as { lat: string; lon: string }[];
     if (!places[0]) throw new ProviderError("openstreetmap", `Could not find ${q.city} in ${q.countryCode}`);
+    lat = Number(places[0].lat);
+    lng = Number(places[0].lon);
+    }
 
-    const query = buildOverpassQuery(industry.osm, Number(places[0].lat), Number(places[0].lon), Math.round((q.radiusKm ?? 5) * 1000), q.limit);
-    const res = await fetch(env.overpassEndpoint, {
-      method: "POST",
-      headers: { "user-agent": UA(), "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ data: query }),
-    });
-    if (!res.ok) throw new ProviderError("openstreetmap", `Overpass query failed (${res.status})`);
-    const json = (await res.json()) as { elements: OverpassElement[] };
+    const query = buildOverpassQuery(industry.osm, lat, lng, Math.round((q.radiusKm ?? 5) * 1000), q.limit);
+    const json = await overpass(query);
     return json.elements
       .map((el) => mapOverpassElement(el, q, industry.label))
       .filter((b): b is DiscoveredBusiness => b !== null)

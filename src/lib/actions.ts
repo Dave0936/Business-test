@@ -35,17 +35,28 @@ export async function guarded(min: Role, fn: (ctx: OrgContext) => Promise<string
 }
 
 /**
- * Process queued jobs right after the response is sent, so work starts without
- * waiting for the standalone worker. Needs the service role key; otherwise the
- * jobs wait for `npm run worker` or the cron endpoint.
+ * Process the organisation's queued user-safe jobs right after the response is sent,
+ * using the member's own session (row-level security applies to everything they do).
+ * Scheduled runs and privileged jobs (deploy, send) are handled by the system worker.
  */
-export function kickWorker() {
+export function kickWorker(ctx: Pick<OrgContext, "supabase" | "organisationId" | "user">) {
+  after(async () => {
+    try {
+      await runWorkerSlice(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, deadlineMs: 55_000, maxJobs: 40 });
+    } catch (e) {
+      console.error("worker slice failed", e);
+    }
+  });
+}
+
+/** Process privileged system jobs (deploy, send) when the service role key is configured. */
+export function kickSystemWorker() {
   if (!env.supabaseServiceRoleKey) return;
   after(async () => {
     try {
-      await runWorkerSlice(createServiceClient(), { deadlineMs: 55_000, maxJobs: 25 });
+      await runWorkerSlice(createServiceClient(), { deadlineMs: 55_000, maxJobs: 10 });
     } catch (e) {
-      console.error("worker slice failed", e);
+      console.error("system worker slice failed", e);
     }
   });
 }

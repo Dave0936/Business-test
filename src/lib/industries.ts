@@ -10,27 +10,29 @@ export interface Industry {
   /** Free-text query fallback. */
   query: string;
   bookingRelevant: boolean;
+  /** Words that a Google Maps listing type must contain for this industry (filters other kinds of place). */
+  kindWords?: string[];
   /** Typical project value used only for clearly-labelled *estimated* opportunity value. */
   typicalProjectValue: number;
 }
 
 export const INDUSTRIES: Industry[] = [
-  { id: "restaurant", label: "Restaurants", sector: "food", osm: ["amenity=restaurant"], googleType: "restaurant", query: "restaurant", bookingRelevant: true, typicalProjectValue: 2500 },
-  { id: "cafe", label: "Cafes", sector: "food", osm: ["amenity=cafe"], googleType: "cafe", query: "cafe", bookingRelevant: false, typicalProjectValue: 1800 },
-  { id: "hotel", label: "Hotels", sector: "hospitality", osm: ["tourism=hotel", "tourism=guest_house"], googleType: "lodging", query: "hotel", bookingRelevant: true, typicalProjectValue: 4500 },
-  { id: "beauty_salon", label: "Beauty salons", sector: "beauty", osm: ["shop=beauty"], googleType: "beauty_salon", query: "beauty salon", bookingRelevant: true, typicalProjectValue: 2000 },
-  { id: "barbershop", label: "Barbershops", sector: "beauty", osm: ["shop=hairdresser"], googleType: "barber_shop", query: "barbershop", bookingRelevant: true, typicalProjectValue: 1500 },
-  { id: "dentist", label: "Dentists", sector: "healthcare", osm: ["amenity=dentist", "healthcare=dentist"], googleType: "dentist", query: "dentist", bookingRelevant: true, typicalProjectValue: 4000 },
-  { id: "construction", label: "Construction", sector: "trades", osm: ["office=construction_company", "craft=builder"], googleType: "general_contractor", query: "construction company", bookingRelevant: false, typicalProjectValue: 3500 },
-  { id: "plumber", label: "Plumbers", sector: "trades", osm: ["craft=plumber"], googleType: "plumber", query: "plumber", bookingRelevant: false, typicalProjectValue: 1800 },
-  { id: "electrician", label: "Electricians", sector: "trades", osm: ["craft=electrician"], googleType: "electrician", query: "electrician", bookingRelevant: false, typicalProjectValue: 1800 },
-  { id: "mechanic", label: "Mechanics", sector: "automotive", osm: ["shop=car_repair"], googleType: "car_repair", query: "car mechanic", bookingRelevant: true, typicalProjectValue: 2000 },
-  { id: "estate_agent", label: "Estate agents", sector: "property", osm: ["office=estate_agent"], googleType: "real_estate_agency", query: "estate agent", bookingRelevant: false, typicalProjectValue: 5000 },
-  { id: "gym", label: "Gyms", sector: "fitness", osm: ["leisure=fitness_centre"], googleType: "gym", query: "gym", bookingRelevant: true, typicalProjectValue: 3000 },
-  { id: "cleaning", label: "Cleaning companies", sector: "services", osm: ["shop=dry_cleaning", "craft=cleaning"], query: "cleaning company", bookingRelevant: true, typicalProjectValue: 1500 },
-  { id: "accountant", label: "Accountants", sector: "professional", osm: ["office=accountant"], googleType: "accounting", query: "accountant", bookingRelevant: true, typicalProjectValue: 3000 },
-  { id: "solicitor", label: "Solicitors", sector: "professional", osm: ["office=lawyer"], googleType: "lawyer", query: "solicitor", bookingRelevant: true, typicalProjectValue: 4000 },
-  { id: "consultant", label: "Consultants", sector: "professional", osm: ["office=consulting"], query: "consultant", bookingRelevant: true, typicalProjectValue: 3000 },
+  { id: "restaurant", label: "Restaurants", sector: "food", osm: ["amenity=restaurant"], googleType: "restaurant", query: "restaurant", bookingRelevant: true, kindWords: ["restaurant","bistro","brasserie","trattoria","grill","steakhouse","diner","eatery","kitchen"], typicalProjectValue: 2500 },
+  { id: "cafe", label: "Cafes", sector: "food", osm: ["amenity=cafe"], googleType: "cafe", query: "cafe", bookingRelevant: false, kindWords: ["cafe","café","coffee","tea","bakery","brunch"], typicalProjectValue: 1800 },
+  { id: "hotel", label: "Hotels", sector: "hospitality", osm: ["tourism=hotel", "tourism=guest_house"], googleType: "lodging", query: "hotel", bookingRelevant: true, kindWords: ["hotel","guest house","inn","bed & breakfast","b&b","lodging","hostel","resort"], typicalProjectValue: 4500 },
+  { id: "beauty_salon", label: "Beauty salons", sector: "beauty", osm: ["shop=beauty"], googleType: "beauty_salon", query: "beauty salon", bookingRelevant: true, kindWords: ["beauty","salon","nail","spa","skin","lash","brow","aesthetic"], typicalProjectValue: 2000 },
+  { id: "barbershop", label: "Barbershops", sector: "beauty", osm: ["shop=hairdresser"], googleType: "barber_shop", query: "barbershop", bookingRelevant: true, kindWords: ["barber","hair"], typicalProjectValue: 1500 },
+  { id: "dentist", label: "Dentists", sector: "healthcare", osm: ["amenity=dentist", "healthcare=dentist"], googleType: "dentist", query: "dentist", bookingRelevant: true, kindWords: ["dentist","dental","orthodont"], typicalProjectValue: 4000 },
+  { id: "construction", label: "Construction", sector: "trades", osm: ["office=construction_company", "craft=builder"], googleType: "general_contractor", query: "construction company", bookingRelevant: false, kindWords: ["construction","builder","contractor","building","renovation"], typicalProjectValue: 3500 },
+  { id: "plumber", label: "Plumbers", sector: "trades", osm: ["craft=plumber"], googleType: "plumber", query: "plumber", bookingRelevant: false, kindWords: ["plumb","heating","gas engineer","boiler"], typicalProjectValue: 1800 },
+  { id: "electrician", label: "Electricians", sector: "trades", osm: ["craft=electrician"], googleType: "electrician", query: "electrician", bookingRelevant: false, kindWords: ["electric"], typicalProjectValue: 1800 },
+  { id: "mechanic", label: "Mechanics", sector: "automotive", osm: ["shop=car_repair"], googleType: "car_repair", query: "car mechanic", bookingRelevant: true, kindWords: ["auto","car repair","mechanic","garage","tyre","tire","mot"], typicalProjectValue: 2000 },
+  { id: "estate_agent", label: "Estate agents", sector: "property", osm: ["office=estate_agent"], googleType: "real_estate_agency", query: "estate agent", bookingRelevant: false, kindWords: ["real estate","estate agent","letting","property"], typicalProjectValue: 5000 },
+  { id: "gym", label: "Gyms", sector: "fitness", osm: ["leisure=fitness_centre"], googleType: "gym", query: "gym", bookingRelevant: true, kindWords: ["gym","fitness","crossfit","training","boxing","yoga","pilates"], typicalProjectValue: 3000 },
+  { id: "cleaning", label: "Cleaning companies", sector: "services", osm: ["shop=dry_cleaning", "craft=cleaning"], query: "cleaning company", bookingRelevant: true, kindWords: ["clean","janitorial","maid"], typicalProjectValue: 1500 },
+  { id: "accountant", label: "Accountants", sector: "professional", osm: ["office=accountant"], googleType: "accounting", query: "accountant", bookingRelevant: true, kindWords: ["account","bookkeep","tax"], typicalProjectValue: 3000 },
+  { id: "solicitor", label: "Solicitors", sector: "professional", osm: ["office=lawyer"], googleType: "lawyer", query: "solicitor", bookingRelevant: true, kindWords: ["lawyer","solicitor","attorney","law firm","legal"], typicalProjectValue: 4000 },
+  { id: "consultant", label: "Consultants", sector: "professional", osm: ["office=consulting"], query: "consultant", bookingRelevant: true, kindWords: ["consult"], typicalProjectValue: 3000 },
   { id: "retail", label: "Independent retail", sector: "retail", osm: ["shop=gift", "shop=clothes", "shop=florist"], googleType: "store", query: "independent shop", bookingRelevant: false, typicalProjectValue: 3500 },
   { id: "other_professional", label: "Other professional services", sector: "professional", osm: ["office=company"], query: "professional services", bookingRelevant: true, typicalProjectValue: 2500 },
 ];

@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
   cacheComponents: false,
   poweredByHeader: false,
   serverExternalPackages: ["playwright", "undici"],
+  // GeoNames town data is read from disk by these routes.
+  outputFileTracingIncludes: {
+    "/api/places/**": ["./data/geonames/**"],
+    "/opportunities": ["./data/geonames/**"],
+  },
   experimental: {
     serverActions: { bodySizeLimit: "2mb" },
   },

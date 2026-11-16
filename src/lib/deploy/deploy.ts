@@ -41,7 +41,7 @@ export async function deployApprovedWebsite(db: SupabaseClient, organisationId: 
   const qa = runQaChecks(version.files, version.spec, { verified: { phone: version.spec.business.phone, email: version.spec.business.email, name: version.spec.business.name }, agencyName: version.spec.agency.name });
   if (!qa.passed) throw new DeploymentBlockedError("Final build validation failed; regenerate and re-approve.");
 
-  const creds = (await getSecret(organisationId, "cloudflare")) as { apiToken?: string; accountId?: string } | null;
+  const creds = (await getSecret(db, organisationId, "cloudflare")) as { apiToken?: string; accountId?: string } | null;
   const projectName = projectNameFor(env.cloudflareProjectPrefix, site.slug);
 
   // Idempotent: one deployment record per approval (unique constraint).

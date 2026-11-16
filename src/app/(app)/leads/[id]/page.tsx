@@ -151,6 +151,9 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                 <dt className="text-muted-foreground">Lead score</dt><dd><ScoreBadge score={b.lead_score} /></dd>
                 <dt className="text-muted-foreground">Opportunity</dt><dd>{humanise(b.opportunity_type)}</dd>
                 <dt className="text-muted-foreground">Address</dt><dd>{[b.address, b.postal_code, b.city].filter(Boolean).join(", ") || "—"}</dd>
+                <dt className="text-muted-foreground">Rating</dt><dd>{b.rating != null ? `${b.rating} ★ from ${b.reviews_count ?? 0} reviews` : "—"}{b.listing_url && <> · <a className="text-primary hover:underline" href={b.listing_url} target="_blank" rel="noopener noreferrer nofollow">listing</a></>}</dd>
+                {b.opening_hours && <><dt className="text-muted-foreground">Opening hours</dt><dd className="text-xs">{Object.entries(b.opening_hours as Record<string, string>).map(([d, h]) => <span key={d} className="block">{d.charAt(0).toUpperCase() + d.slice(1)}: {h}</span>)}</dd></>}
+                {b.is_chain && <><dt className="text-muted-foreground">Chain</dt><dd>Looks like a chain or franchise</dd></>}
                 <dt className="text-muted-foreground">Contact page</dt><dd>{b.contact_page_url ? <a className="text-primary hover:underline" href={b.contact_page_url} target="_blank" rel="noopener noreferrer nofollow">Open</a> : "—"}</dd>
                 <dt className="text-muted-foreground">Discovered</dt><dd>{formatDate(b.discovered_at, true)}</dd>
                 <dt className="text-muted-foreground">Revenue</dt><dd>{b.actual_revenue ? formatMoney(Number(b.actual_revenue)) : "—"} {b.estimated_value ? <span className="text-xs text-muted-foreground">(est. {formatMoney(Number(b.estimated_value))})</span> : null}</dd>

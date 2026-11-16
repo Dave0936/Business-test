@@ -24,7 +24,7 @@ const SEARCHES = [
 export async function seedDemoData(db: SupabaseClient, organisationId: string, actorId: string | null, opts: { prototypes?: number } = {}) {
   const created: string[] = [];
   for (const s of SEARCHES) {
-    const found = await demoProvider.search({ ...s, limit: 8 });
+    const found = await demoProvider.search({ ...s, limit: 8 }, null);
     const res = await ingestDiscovered(db, organisationId, found, demoProvider.terms, { industryId: s.industryId, actorId });
     created.push(...res.created);
   }

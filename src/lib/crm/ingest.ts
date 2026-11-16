@@ -70,6 +70,12 @@ export async function ingestDiscovered(
       fill("contact_page_url", rec.contactPageUrl);
       fill("latitude", rec.latitude);
       fill("longitude", rec.longitude);
+      // Listing facts change over time: take the newest value from a listing provider.
+      if (rec.rating != null) patch.rating = rec.rating;
+      if (rec.reviewsCount != null) patch.reviews_count = rec.reviewsCount;
+      if (rec.openingHours) patch.opening_hours = rec.openingHours;
+      if (rec.isChain) patch.is_chain = true;
+      if (rec.sourceUrl && /google\.com\/maps/.test(rec.sourceUrl)) patch.listing_url = rec.sourceUrl;
       if (Object.keys(patch).length) {
         const { error } = await db.from("businesses").update(patch).eq("id", businessId).eq("organisation_id", organisationId);
         if (error) throw error;
@@ -102,6 +108,11 @@ export async function ingestDiscovered(
           opportunity_type: ownSite ? "unknown" : "no_website",
           dedupe_key: id.dedupeKey,
           is_demo: rec.isDemo,
+          rating: rec.rating ?? null,
+          reviews_count: rec.reviewsCount ?? null,
+          opening_hours: rec.openingHours ?? null,
+          is_chain: rec.isChain ?? false,
+          listing_url: rec.sourceUrl && /google\.com\/maps/.test(rec.sourceUrl) ? rec.sourceUrl : null,
         })
         .select("id")
         .single();

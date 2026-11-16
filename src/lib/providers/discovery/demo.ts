@@ -32,7 +32,6 @@ export const demoProvider: DiscoveryProvider = {
   label: "Demo data (fictional)",
   description: "Fictional sample businesses for testing the workflow. Never contacts anyone.",
   terms: { storeRaw: true, retentionDays: null, restrictedFields: [], attribution: "Fictional demo data", licence: "demo" },
-  available: () => true,
   async search(q) {
     const industry = industryById(q.industryId);
     const names = NAMES[q.industryId] ?? NAMES.default;

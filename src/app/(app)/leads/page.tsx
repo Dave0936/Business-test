@@ -22,7 +22,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const ctx = await getOrgContext();
   let q = ctx.supabase
     .from("businesses")
-    .select("id, name, category, industry_id, city, country_code, website_url, email, opportunity_type, lead_score, status, discovered_at, is_demo", { count: "exact" })
+    .select("id, name, category, industry_id, city, country_code, website_url, email, opportunity_type, lead_score, status, discovered_at, is_demo, rating, reviews_count", { count: "exact" })
     .eq("organisation_id", ctx.organisationId);
   if (f.country) q = q.eq("country_code", f.country);
   if (f.sector) q = q.eq("industry_id", f.sector);
@@ -62,7 +62,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                   <TableCell><input type="checkbox" name="businessId" value={b.id} aria-label={`Select ${b.name}`} className="size-4" /></TableCell>
                   <TableCell>
                     <Link href={`/leads/${b.id}`} className="font-medium hover:underline">{b.name}</Link> <DemoBadge show={b.is_demo} />
-                    <div className="text-xs text-muted-foreground">{industryById(b.industry_id)?.label ?? b.category ?? "—"}{b.email ? " · has email" : ""}</div>
+                    <div className="text-xs text-muted-foreground">{industryById(b.industry_id)?.label ?? b.category ?? "—"}{b.rating != null ? ` · ${b.rating}★ (${b.reviews_count ?? 0})` : ""}{b.email ? " · has email" : ""}</div>
                   </TableCell>
                   <TableCell className="text-sm">{b.city ?? "—"}, {b.country_code}</TableCell>
                   <TableCell className="max-w-48 truncate text-sm">{b.website_url ? <a href={b.website_url} target="_blank" rel="noopener noreferrer nofollow" className="text-primary hover:underline">{b.website_url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</a> : <span className="text-muted-foreground">None</span>}</TableCell>

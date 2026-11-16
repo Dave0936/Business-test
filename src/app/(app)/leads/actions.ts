@@ -2,27 +2,25 @@
 import { z } from "zod";
 import { guarded, kickWorker, str, type ActionState } from "@/lib/actions";
 import { enqueue, monthKey, DEFAULT_CASCADE } from "@/lib/jobs/queue";
-import { createServiceClient } from "@/lib/supabase/server";
+import type { OrgContext } from "@/lib/auth";
 import { writeAudit } from "@/lib/audit-log";
 import { LEAD_STATUSES } from "@/lib/industries";
 
 const ID = z.string().uuid();
 
-async function queueFor(businessIds: string[], type: "audit" | "research" | "generate" | "draft_email", ctx: { organisationId: string; user: { id: string } }, force = false) {
-  const admin = createServiceClient();
-  // Make sure each id belongs to this organisation (service role bypasses RLS).
-  const { data: owned } = await admin.from("businesses").select("id").eq("organisation_id", ctx.organisationId).in("id", businessIds);
+async function queueFor(businessIds: string[], type: "audit" | "research" | "generate" | "draft_email", ctx: OrgContext, force = false) {
+  const { data: owned } = await ctx.supabase.from("businesses").select("id").eq("organisation_id", ctx.organisationId).in("id", businessIds);
   let queued = 0;
   for (const { id } of owned ?? []) {
     const key = type === "audit" ? `audit:${id}:${monthKey()}` : type === "research" ? `research:${id}:${monthKey()}` : type === "generate" ? `generate:${id}` : `draft:${id}:initial`;
-    const ok = await enqueue(admin, {
+    const ok = await enqueue(ctx.supabase, {
       organisationId: ctx.organisationId, type,
       payload: { businessId: id, actorId: ctx.user.id, cascade: { ...DEFAULT_CASCADE, research: false, generate: false } },
       idempotencyKey: force ? `${key}:manual:${Date.now()}` : key,
     });
     if (ok) queued++;
   }
-  kickWorker();
+  kickWorker(ctx);
   return queued;
 }
 

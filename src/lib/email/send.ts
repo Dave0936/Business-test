@@ -59,7 +59,7 @@ export async function sendApprovedEmail(db: SupabaseClient, organisationId: stri
     throw new SendDeferredError(`Daily sending limit (${org?.daily_email_limit}) reached; will retry tomorrow.`, tomorrow);
   }
 
-  const creds = await getSecret(organisationId, "resend");
+  const creds = await getSecret(db, organisationId, "resend");
   if (!creds?.apiKey || !creds.fromEmail) throw new SendBlockedError("Resend is not connected (RESEND_API_KEY and RESEND_FROM_EMAIL). Nothing was sent.");
 
   // Database guard verifies approval again on this transition.
@@ -100,8 +100,8 @@ export async function sendApprovedEmail(db: SupabaseClient, organisationId: stri
 }
 
 /** Test send: only to the signed-in user's own address; never to the prospect. */
-export async function sendTestEmail(organisationId: string, to: string, subject: string, body: string) {
-  const creds = await getSecret(organisationId, "resend");
+export async function sendTestEmail(db: SupabaseClient, organisationId: string, to: string, subject: string, body: string) {
+  const creds = await getSecret(db, organisationId, "resend");
   if (!creds?.apiKey || !creds.fromEmail) throw new SendBlockedError("Resend is not connected. Test sending is unavailable.");
   const resend = new Resend(creds.apiKey);
   const { data, error } = await resend.emails.send({ from: creds.fromEmail, to: [to], subject: `[TEST] ${subject}`, text: body, html: textToHtml(body) });

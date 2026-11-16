@@ -20,6 +20,9 @@ export const env = {
   anthropicApiKey: opt("ANTHROPIC_API_KEY"),
   anthropicModel: opt("ANTHROPIC_MODEL") ?? "claude-opus-5-5",
   googlePlacesApiKey: opt("GOOGLE_PLACES_API_KEY"),
+  serpApiKey: opt("SERPAPI_API_KEY"),
+  higgsfieldKeyId: opt("HIGGSFIELD_API_KEY_ID"),
+  higgsfieldKeySecret: opt("HIGGSFIELD_API_KEY_SECRET"),
   overpassEndpoint: opt("OVERPASS_ENDPOINT") ?? "https://overpass-api.de/api/interpreter",
   nominatimEndpoint: opt("NOMINATIM_ENDPOINT") ?? "https://nominatim.openstreetmap.org/search",
   osmContactEmail: opt("OSM_CONTACT_EMAIL"),
@@ -41,7 +44,9 @@ export function supabaseConfigured(): boolean {
 export type IntegrationKey =
   | "anthropic"
   | "google_places"
+  | "serpapi"
   | "openstreetmap"
+  | "higgsfield"
   | "pinterest"
   | "unsplash"
   | "cloudflare"
@@ -54,6 +59,10 @@ export function platformCredential(key: IntegrationKey): boolean {
       return Boolean(env.anthropicApiKey);
     case "google_places":
       return Boolean(env.googlePlacesApiKey);
+    case "serpapi":
+      return Boolean(env.serpApiKey);
+    case "higgsfield":
+      return Boolean(env.higgsfieldKeyId && env.higgsfieldKeySecret);
     case "openstreetmap":
       return true; // public, keyless; usage policy applies
     case "pinterest":

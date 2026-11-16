@@ -5,21 +5,21 @@ import { z } from "zod";
 import { guarded, kickWorker, str, type ActionState } from "@/lib/actions";
 import { startWorkflowRun, type WorkflowConfig } from "@/lib/jobs/worker";
 import { getProvider } from "@/lib/providers/discovery";
+import { getSecret } from "@/lib/integrations";
 import { ingestDiscovered } from "@/lib/crm/ingest";
 import { writeAudit } from "@/lib/audit-log";
-import { createServiceClient } from "@/lib/supabase/server";
-import { env } from "@/lib/env";
 import type { DiscoveredBusiness } from "@/lib/providers/discovery/types";
 
 const SearchSchema = z.object({
   provider: z.string().min(1),
   countryCode: z.string().regex(/^[A-Za-z]{2}$/, "Choose a country."),
-  region: z.string().max(80).optional(),
-  cities: z.string().min(1, "Enter at least one city.").max(500),
+  towns: z.array(z.object({ name: z.string().min(1).max(120), region: z.string().max(120).optional(), lat: z.number().optional(), lng: z.number().optional() })).min(1, "Add at least one town.").max(20),
   industryIds: z.array(z.string()).min(1, "Choose at least one industry."),
   businessType: z.string().max(80).optional(),
   radiusKm: z.coerce.number().min(1).max(50).default(5),
   limit: z.coerce.number().int().min(1).max(200).default(50),
+  pages: z.coerce.number().int().min(1).max(3).default(1),
+  excludeChains: z.boolean(),
   minScore: z.coerce.number().int().min(0).max(100).default(55),
   audit: z.boolean(), research: z.boolean(), generate: z.boolean(),
   prototypeLimit: z.coerce.number().int().min(0).max(100).default(5),
@@ -28,33 +28,44 @@ const SearchSchema = z.object({
 export async function runSearch(_p: ActionState, form: FormData): Promise<ActionState> {
   let runId: string | null = null;
   const state = await guarded("staff", async (ctx) => {
+    let towns: unknown = [];
+    try {
+      towns = JSON.parse(str(form, "towns") || "[]");
+    } catch {
+      throw new Error("Town list could not be read. Re-add the towns and try again.");
+    }
     const parsed = SearchSchema.safeParse({
-      provider: str(form, "provider"), countryCode: str(form, "countryCode"), region: str(form, "region") || undefined,
-      cities: str(form, "cities"), industryIds: form.getAll("industryIds").map(String), businessType: str(form, "businessType") || undefined,
-      radiusKm: str(form, "radiusKm") || 5, limit: str(form, "limit") || 50, minScore: str(form, "minScore") || 55,
+      provider: str(form, "provider"), countryCode: str(form, "countryCode"), towns,
+      industryIds: form.getAll("industryIds").map(String), businessType: str(form, "businessType") || undefined,
+      radiusKm: str(form, "radiusKm") || 5, limit: str(form, "limit") || 50, pages: str(form, "pages") || 1,
+      excludeChains: form.get("excludeChains") === "on", minScore: str(form, "minScore") || 55,
       audit: form.get("audit") === "on", research: form.get("research") === "on", generate: form.get("generate") === "on",
       prototypeLimit: str(form, "prototypeLimit") || 5,
     });
     if (!parsed.success) throw new Error(parsed.error.issues[0].message);
     const d = parsed.data;
     const provider = getProvider(d.provider);
-    if (!provider?.available()) throw new Error(provider?.unavailableReason?.() ?? "That data provider is not available.");
-    if (!env.supabaseServiceRoleKey) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required to run background jobs.");
+    if (!provider) throw new Error("Unknown data source.");
+    if (provider.requires && !(await getSecret(ctx.supabase, ctx.organisationId, provider.requires))) {
+      throw new Error(`${provider.label} is not connected. Add its key in Integrations first.`);
+    }
     const config: WorkflowConfig = {
       provider: d.provider,
       sectors: d.industryIds,
-      locations: d.cities.split(/[\n,;]/).map((c) => c.trim()).filter(Boolean).slice(0, 20).map((city) => ({ countryCode: d.countryCode.toUpperCase(), city, region: d.region })),
+      locations: d.towns.map((t) => ({ countryCode: d.countryCode.toUpperCase(), city: t.name, region: t.region, lat: t.lat, lng: t.lng })),
       leadsPerSearch: d.limit,
+      businessType: d.businessType,
       radiusKm: d.radiusKm,
+      pages: d.pages,
+      excludeChains: d.excludeChains,
       minScore: d.minScore,
       prototypeLimit: d.prototypeLimit,
       agents: { audit: d.audit, research: d.audit && d.research, generate: d.audit && d.research && d.generate, email: true },
     };
-    // Jobs and runs are written with the service role (members can only read them).
-    const admin = createServiceClient();
-    runId = await startWorkflowRun(admin, ctx.organisationId, null, config, ctx.user.id);
-    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "discovery.started", entityType: "automation_run", entityId: runId, data: { config } });
-    kickWorker();
+    // Runs and jobs are created with the member's own permissions (checked in the database).
+    runId = await startWorkflowRun(ctx.supabase, ctx.organisationId, null, config, ctx.user.id);
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "discovery.started", entityType: "automation_run", entityId: runId, data: { provider: d.provider, towns: d.towns.map((t) => t.name), industries: d.industryIds } });
+    kickWorker(ctx);
   });
   if (runId) redirect(`/automation/runs/${runId}`);
   return state;

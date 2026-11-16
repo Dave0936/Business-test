@@ -13,14 +13,25 @@ import { COUNTRIES, INDUSTRIES } from "@/lib/industries";
 import { DISCOVERY_PROVIDERS } from "@/lib/providers/discovery";
 import { aiAvailable } from "@/lib/ai/client";
 import { formatDate } from "@/lib/utils";
-import { addManual, importCsv, runSearch } from "./actions";
+import { addManual, importCsv } from "./actions";
+import { SearchForm } from "./search-form";
+import { integrationStatus } from "@/lib/integrations";
+import { listCountries } from "@/lib/places";
 
 export const metadata: Metadata = { title: "Find Opportunities" };
 
 export default async function OpportunitiesPage() {
   const ctx = await getOrgContext();
   const { data: runs } = await ctx.supabase.from("automation_runs").select("id, status, started_at, stats, workflow_id").eq("organisation_id", ctx.organisationId).is("workflow_id", null).order("started_at", { ascending: false }).limit(8);
-  const providers = DISCOVERY_PROVIDERS.map((p) => ({ id: p.id, label: p.label, description: p.description, available: p.available(), reason: p.unavailableReason?.(), attribution: p.terms.attribution, retention: p.terms.retentionDays }));
+  const [status, countries, { data: org }] = await Promise.all([
+    integrationStatus(ctx.supabase, ctx.organisationId),
+    listCountries(),
+    ctx.supabase.from("organisations").select("default_country_code").eq("id", ctx.organisationId).single(),
+  ]);
+  const providers = DISCOVERY_PROVIDERS.map((p) => {
+    const available = !p.requires || status[p.requires].mode === "live";
+    return { id: p.id, label: p.label, description: p.description, available, reason: available ? undefined : "connect in Integrations", paid: Boolean(p.costNote), attribution: p.terms.attribution, retention: p.terms.retentionDays };
+  });
   const writable = canWrite(ctx.role);
 
   return (
@@ -39,41 +50,7 @@ export default async function OpportunitiesPage() {
             <CardDescription>Each city × industry pair runs as its own background search. Re-running never duplicates businesses or audits.</CardDescription>
           </CardHeader>
           <CardContent>
-            <ActionForm action={runSearch} submitLabel="Start search" disabled={!writable}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Data source" htmlFor="provider" className="sm:col-span-2" hint="Only sources you are authorised to use are listed as available.">
-                  <Select id="provider" name="provider" defaultValue={providers.find((p) => p.available && p.id !== "demo")?.id ?? "demo"}>
-                    {providers.map((p) => <option key={p.id} value={p.id} disabled={!p.available}>{p.label}{p.available ? "" : ` — ${p.reason}`}</option>)}
-                  </Select>
-                </Field>
-                <Field label="Country" htmlFor="countryCode">
-                  <Select id="countryCode" name="countryCode" defaultValue="GB">{COUNTRIES.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}</Select>
-                </Field>
-                <Field label="Region (optional)" htmlFor="region"><Input id="region" name="region" placeholder="Scotland" /></Field>
-                <Field label="Cities" htmlFor="cities" className="sm:col-span-2" hint="One or more, separated by commas.">
-                  <Input id="cities" name="cities" required placeholder="Edinburgh, Glasgow" />
-                </Field>
-                <fieldset className="sm:col-span-2">
-                  <legend className="mb-2 text-sm font-medium">Industries</legend>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 md:grid-cols-3">
-                    {INDUSTRIES.map((i) => (
-                      <label key={i.id} className="flex items-center gap-2 text-sm"><input type="checkbox" name="industryIds" value={i.id} defaultChecked={i.id === "restaurant"} className="size-4 accent-[var(--primary)]" />{i.label}</label>
-                    ))}
-                  </div>
-                </fieldset>
-                <Field label="Business type (optional)" htmlFor="businessType" hint="Narrows text-based providers, e.g. “vegan restaurant”."><Input id="businessType" name="businessType" /></Field>
-                <Field label="Search radius (km)" htmlFor="radiusKm"><Input id="radiusKm" name="radiusKm" type="number" min={1} max={50} defaultValue={5} /></Field>
-                <Field label="Businesses per search" htmlFor="limit"><Input id="limit" name="limit" type="number" min={1} max={200} defaultValue={50} /></Field>
-                <Field label="Minimum lead score to qualify" htmlFor="minScore"><Input id="minScore" name="minScore" type="number" min={0} max={100} defaultValue={55} /></Field>
-                <fieldset className="space-y-2 sm:col-span-2 rounded-lg border p-3">
-                  <legend className="px-1 text-sm font-medium">Then automatically</legend>
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="audit" defaultChecked className="size-4" />Audit websites and score every lead</label>
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="research" defaultChecked className="size-4" />Research design direction for qualified leads</label>
-                  <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="generate" className="size-4" />Generate prototypes, up to <input name="prototypeLimit" type="number" min={0} max={100} defaultValue={5} className="h-7 w-16 rounded border px-1" aria-label="Prototype limit" /> per search</label>
-                  <p className="text-xs text-muted-foreground">Prototypes stop at the approval centre. Nothing is deployed or emailed without approval.</p>
-                </fieldset>
-              </div>
-            </ActionForm>
+            <SearchForm providers={providers.map((p) => ({ id: p.id, label: p.label, available: p.available, reason: p.reason, paid: p.paid }))} countries={countries.map((c) => ({ code: c.code, name: c.name }))} industries={INDUSTRIES.map((i) => ({ id: i.id, label: i.label }))} disabled={!writable} defaultCountry={org?.default_country_code ?? "GB"} />
           </CardContent>
         </Card>
 

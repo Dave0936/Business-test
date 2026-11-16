@@ -1,4 +1,3 @@
-import { env } from "@/lib/env";
 import { industryById } from "@/lib/industries";
 import { ProviderError, type DiscoveredBusiness, type DiscoveryProvider } from "./types";
 
@@ -15,7 +14,7 @@ import { ProviderError, type DiscoveredBusiness, type DiscoveryProvider } from "
 const FIELD_MASK = [
   "places.id", "places.displayName", "places.formattedAddress", "places.addressComponents",
   "places.location", "places.websiteUri", "places.internationalPhoneNumber", "places.primaryTypeDisplayName",
-  "places.googleMapsUri", "places.businessStatus",
+  "places.googleMapsUri", "places.businessStatus", "places.rating", "places.userRatingCount",
 ].join(",");
 
 interface Place {
@@ -29,6 +28,8 @@ interface Place {
   primaryTypeDisplayName?: { text: string };
   googleMapsUri?: string;
   businessStatus?: string;
+  rating?: number;
+  userRatingCount?: number;
 }
 
 export const googlePlacesProvider: DiscoveryProvider = {
@@ -42,10 +43,10 @@ export const googlePlacesProvider: DiscoveryProvider = {
     attribution: "Data from Google",
     licence: "Google Maps Platform Terms",
   },
-  available: () => Boolean(env.googlePlacesApiKey),
-  unavailableReason: () => "Set GOOGLE_PLACES_API_KEY to enable Google Places.",
-  async search(q) {
-    if (!env.googlePlacesApiKey) throw new ProviderError("google_places", "API key not configured");
+  requires: "google_places",
+  async search(q, credentials) {
+    const apiKey = credentials?.apiKey;
+    if (!apiKey) throw new ProviderError("google_places", "Google Places is not connected. Add a key in Integrations.");
     const industry = industryById(q.industryId);
     const results: DiscoveredBusiness[] = [];
     let pageToken: string | undefined;
@@ -64,7 +65,7 @@ export const googlePlacesProvider: DiscoveryProvider = {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "X-Goog-Api-Key": env.googlePlacesApiKey,
+          "X-Goog-Api-Key": apiKey,
           "X-Goog-FieldMask": `${FIELD_MASK},nextPageToken`,
         },
         body: JSON.stringify(body),
@@ -94,6 +95,8 @@ export const googlePlacesProvider: DiscoveryProvider = {
           sourceUrl: p.googleMapsUri ?? null,
           raw: null,
           isDemo: false,
+          rating: p.rating ?? null,
+          reviewsCount: p.userRatingCount ?? null,
         });
       }
       pageToken = json.nextPageToken;

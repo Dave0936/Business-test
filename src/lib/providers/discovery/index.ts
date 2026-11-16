@@ -1,6 +1,7 @@
 import { demoProvider } from "./demo";
 import { googlePlacesProvider } from "./google-places";
 import { openStreetMapProvider } from "./openstreetmap";
+import { serpApiProvider } from "./serpapi";
 import type { DiscoveryProvider } from "./types";
 
 /**
@@ -8,7 +9,7 @@ import type { DiscoveryProvider } from "./types";
  * DiscoveryProvider (with honest ProviderTerms) and register it here.
  * CSV import of licensed lists is handled separately in lib/crm/import.ts.
  */
-export const DISCOVERY_PROVIDERS: DiscoveryProvider[] = [openStreetMapProvider, googlePlacesProvider, demoProvider];
+export const DISCOVERY_PROVIDERS: DiscoveryProvider[] = [serpApiProvider, googlePlacesProvider, openStreetMapProvider, demoProvider];
 
 export function getProvider(id: string): DiscoveryProvider | undefined {
   return DISCOVERY_PROVIDERS.find((p) => p.id === id);

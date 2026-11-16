@@ -9,6 +9,7 @@ import { deployApprovedWebsite, DeploymentBlockedError } from "@/lib/deploy/depl
 import { draftEmail, DraftBlockedError } from "@/lib/email/draft";
 import { sendApprovedEmail, SendBlockedError, SendDeferredError } from "@/lib/email/send";
 import { aiAvailable, monthToDateSpend } from "@/lib/ai/client";
+import { getSecret } from "@/lib/integrations";
 import { DEFAULT_CASCADE, enqueue, monthKey, type Cascade, type JobType } from "./queue";
 
 export interface JobRow {
@@ -47,9 +48,17 @@ export async function handleJob(db: SupabaseClient, job: JobRow): Promise<Record
     case "discover": {
       const provider = getProvider(String(p.provider));
       if (!provider) throw new PermanentJobError(`Unknown provider ${String(p.provider)}`);
-      if (!provider.available()) throw new PermanentJobError(provider.unavailableReason?.() ?? `${provider.label} is not configured`);
+      const credentials = provider.requires ? await getSecret(db, org, provider.requires) : null;
+      if (provider.requires && !credentials) throw new PermanentJobError(`${provider.label} is not connected. Add its key in Integrations.`);
       const query = p.query as DiscoveryQuery;
-      const found = await provider.search(query);
+      let found;
+      try {
+        found = await provider.search(query, credentials);
+      } catch (e) {
+        // Bad keys and exhausted quotas will not fix themselves on retry.
+        if (/invalid api key|not connected|run out of searches|account.*(suspended|disabled)|HTTP 401|HTTP 403/i.test((e as Error).message)) throw new PermanentJobError((e as Error).message);
+        throw e;
+      }
       const res = await ingestDiscovered(db, org, found, provider.terms, { industryId: query.industryId, actorId: (p.actorId as string) ?? null });
       await bump(db, job.run_id, "discovered", found.length);
       await bump(db, job.run_id, "new_businesses", res.created.length);

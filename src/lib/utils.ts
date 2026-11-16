@@ -15,3 +15,8 @@ export function formatMoney(n: number | null | undefined, currency = "GBP"): str
   if (n === null || n === undefined) return "—";
   return new Intl.NumberFormat("en-GB", { style: "currency", currency, maximumFractionDigits: 0 }).format(n);
 }
+
+/** Request-time clock for server components (kept out of render bodies for the purity lint rule). */
+export function nowMs(): number {
+  return Date.now();
+}

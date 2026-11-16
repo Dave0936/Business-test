@@ -2,6 +2,13 @@ export interface DiscoveryQuery {
   countryCode: string;
   region?: string;
   city: string;
+  /** Town centre (from GeoNames) when known; providers that support coordinates use it. */
+  lat?: number;
+  lng?: number;
+  /** Result pages for paid providers (SerpAPI: 20 per page, one credit each). */
+  pages?: number;
+  /** Skip chains and franchises (default true). */
+  excludeChains?: boolean;
   industryId: string;
   businessType?: string;
   radiusKm?: number;
@@ -41,6 +48,10 @@ export interface DiscoveredBusiness {
   sourceUrl: string | null;
   raw: unknown;
   isDemo: boolean;
+  rating?: number | null;
+  reviewsCount?: number | null;
+  openingHours?: Record<string, string> | null;
+  isChain?: boolean;
 }
 
 export interface DiscoveryProvider {
@@ -48,10 +59,11 @@ export interface DiscoveryProvider {
   label: string;
   description: string;
   terms: ProviderTerms;
-  /** Configured and allowed to run. */
-  available(): boolean;
-  unavailableReason?(): string;
-  search(q: DiscoveryQuery): Promise<DiscoveredBusiness[]>;
+  /** Integration whose credentials this provider needs (organisation connection or platform env). */
+  requires?: "google_places" | "serpapi";
+  /** Rough cost note shown before running, if the provider is paid. */
+  costNote?: (q: DiscoveryQuery) => string;
+  search(q: DiscoveryQuery, credentials: Record<string, string> | null): Promise<DiscoveredBusiness[]>;
 }
 
 export class ProviderError extends Error {

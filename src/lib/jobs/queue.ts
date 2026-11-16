@@ -25,25 +25,23 @@ export interface EnqueueArgs {
   maxAttempts?: number;
 }
 
-/** Enqueue a job; returns false if an identical job already exists. */
+/**
+ * Enqueue a job through the enqueue_job() database function, which checks the caller's
+ * role and only lets members queue user-safe job types (deploy and send are system-only).
+ * Returns false if identical work already exists (keys are namespaced per organisation).
+ */
 export async function enqueue(db: SupabaseClient, a: EnqueueArgs): Promise<boolean> {
-  const { data, error } = await db
-    .from("jobs")
-    .upsert(
-      {
-        organisation_id: a.organisationId,
-        run_id: a.runId ?? null,
-        type: a.type,
-        payload: a.payload,
-        idempotency_key: a.idempotencyKey,
-        run_at: (a.runAt ?? new Date()).toISOString(),
-        max_attempts: a.maxAttempts ?? 3,
-      },
-      { onConflict: "idempotency_key", ignoreDuplicates: true },
-    )
-    .select("id");
-  if (error) throw error;
-  return (data?.length ?? 0) > 0;
+  const { data, error } = await db.rpc("enqueue_job", {
+    p_org: a.organisationId,
+    p_run: a.runId ?? null,
+    p_type: a.type,
+    p_payload: a.payload,
+    p_key: a.idempotencyKey,
+    p_run_at: (a.runAt ?? new Date()).toISOString(),
+    p_max_attempts: a.maxAttempts ?? 3,
+  });
+  if (error) throw new Error(`Could not queue ${a.type}: ${error.message}`);
+  return data === true;
 }
 
 export const monthKey = () => new Date().toISOString().slice(0, 7);
