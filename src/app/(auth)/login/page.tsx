@@ -18,8 +18,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <p className="text-xs text-brand-foreground/70">Nothing is deployed or sent without a person approving it.</p>
         <div aria-hidden className="pointer-events-none absolute -right-24 -bottom-24 size-96 rounded-full bg-highlight/25 blur-3xl" />
       </section>
-      <section className="flex items-center justify-center p-6">
+      <section className="flex flex-col items-center justify-center gap-6 p-6">
         <LoginForm next={next} />
+        <a href="/privacy" className="text-xs text-muted-foreground hover:underline">Privacy policy</a>
       </section>
     </main>
   );

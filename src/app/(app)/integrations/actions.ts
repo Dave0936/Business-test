@@ -1,4 +1,5 @@
 "use server";
+import { writeAudit } from "@/lib/audit-log";
 import { guarded, str, type ActionState } from "@/lib/actions";
 import { encryptSecret } from "@/lib/security/crypto";
 import { credentialFields, verifyCredential } from "@/lib/integrations-verify";
@@ -29,8 +30,19 @@ export async function connectIntegration(_p: ActionState, form: FormData): Promi
 
 export async function disconnectIntegration(_p: ActionState, form: FormData): Promise<ActionState> {
   return guarded("administrator", async (ctx) => {
-    const { error } = await ctx.supabase.rpc("save_integration", { p_org: ctx.organisationId, p_provider: str(form, "provider"), p_ciphertext: null, p_config: {}, p_status: "disconnected" });
+    const provider = str(form, "provider");
+    const { error } = await ctx.supabase.rpc("save_integration", { p_org: ctx.organisationId, p_provider: provider, p_ciphertext: null, p_config: {}, p_status: "disconnected" });
     if (error) throw new Error(error.message);
+    if (provider === "pinterest") {
+      // Pinterest content is only kept while the account is connected (see /privacy).
+      const [{ count }, links] = await Promise.all([
+        ctx.supabase.from("design_references").delete({ count: "exact" }).eq("organisation_id", ctx.organisationId).eq("source", "pinterest"),
+        ctx.supabase.from("pinterest_board_links").delete().eq("organisation_id", ctx.organisationId),
+      ]);
+      if (links.error) throw new Error(links.error.message);
+      await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "integration.pinterest_data_deleted", data: { references: count ?? 0 } });
+      return `Disconnected. The stored token, your board assignments and ${count ?? 0} saved Pinterest references were deleted.`;
+    }
     return "Disconnected. The stored key was deleted.";
   }, ["/integrations", "/opportunities"]);
 }
