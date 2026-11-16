@@ -204,3 +204,30 @@ describe("industry from a free-text category", () => {
     expect(presetBrief(inferIndustryId("Bistro") ?? null, "X").ctas[0].label).toBe("Book a table");
   });
 });
+
+describe("web search research", () => {
+  it("keeps only safe https business sites, one per site, home page preferred, none already saved", async () => {
+    const { chooseResearchHits } = await import("@/lib/design/research-rules");
+    const hits = [
+      { url: "https://www.linen-oak.example/menu", title: "Menu" },
+      { url: "https://www.linen-oak.example/", title: "Linen & Oak" },
+      { url: "http://plain-http.example/", title: "Insecure" },
+      { url: "https://www.tripadvisor.co.uk/Restaurant_Review", title: "Review site" },
+      { url: "https://m.facebook.com/somebistro", title: "Social" },
+      { url: "https://10.0.0.8/", title: "Private address" },
+      { url: "https://already.example/", title: "Saved before" },
+      { url: "javascript:alert(1)", title: "Script" },
+      { url: "https://harbour-bistro.example/about", title: "About" },
+    ];
+    const out = chooseResearchHits(hits, new Set(["https://already.example"]));
+    expect(out).toEqual([
+      { url: "https://www.linen-oak.example/", title: "Linen & Oak" },
+      { url: "https://harbour-bistro.example/about", title: "About" },
+    ]);
+  });
+  it("caps candidates at twenty", async () => {
+    const { chooseResearchHits } = await import("@/lib/design/research-rules");
+    const many = Array.from({ length: 40 }, (_, i) => ({ url: `https://site-${i}.example/`, title: `S${i}` }));
+    expect(chooseResearchHits(many, new Set())).toHaveLength(20);
+  });
+});

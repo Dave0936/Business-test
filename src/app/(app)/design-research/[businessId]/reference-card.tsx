@@ -28,7 +28,7 @@ export function ReferenceCard({ r, businessId, imageSrc, pickedFor, canEdit }: {
           {r.storage_path ? <span className="line-clamp-2 font-medium">{r.title ?? "Your picture"}</span> : (
             <a href={r.url} target="_blank" rel="noopener noreferrer nofollow" className="line-clamp-2 font-medium hover:underline">{r.title ?? r.url}</a>
           )}
-          <Badge variant="secondary" className="shrink-0">{KIND_LABEL[r.kind] ?? r.kind}</Badge>
+          <Badge variant="secondary" className="shrink-0">{r.source === "web_search" ? "Web search" : KIND_LABEL[r.kind] ?? r.kind}</Badge>
         </div>
         {r.attribution && <p className="text-xs text-muted-foreground">{r.attribution}{r.business_id ? "" : " · sector-wide"}</p>}
         {facts && (facts.fonts.length > 0 || facts.colours.length > 0) && (

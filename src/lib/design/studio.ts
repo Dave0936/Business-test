@@ -3,9 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSecret } from "@/lib/integrations";
 import { boardPinsPage, searchPins, type PinRef } from "@/lib/providers/design/pinterest";
 import { industryById, inferIndustryId } from "@/lib/industries";
-import { aiAvailable } from "@/lib/ai/client";
+import { aiAvailable, monthToDateSpend, runWebSearch } from "@/lib/ai/client";
 import { runDesignAgent } from "@/lib/ai/agents/design-agent";
-import { runJudgeAgent, runQuestionsAgent, type RefSummary } from "@/lib/ai/agents/studio-agents";
+import { RESEARCH_SEARCH_SYSTEM, runJudgeAgent, runQuestionsAgent, runResearchPickAgent, type RefSummary } from "@/lib/ai/agents/studio-agents";
+import { chooseResearchHits, RESEARCH_BLOCKED_DOMAINS } from "./research-rules";
 import { describeFetchError, safeFetch, assertSafeUrl } from "@/lib/security/safe-fetch";
 import { extractSiteDesignFacts, type SiteDesignFacts } from "./site-facts";
 import { sniffImage } from "./image-sniff";
@@ -160,7 +161,7 @@ function safeImageUrl(u: string | null | undefined): string | null {
 }
 
 /** A website the designer likes: stored as a link, with observed fonts, colours and preview image. */
-export async function addSiteReference(db: SupabaseClient, org: string, businessId: string, rawUrl: string, notes: string | null, actorId: string): Promise<{ note: string }> {
+export async function addSiteReference(db: SupabaseClient, org: string, businessId: string, rawUrl: string, notes: string | null, actorId: string, sourceOverride?: "web_search"): Promise<{ note: string }> {
   const url = assertSafeUrl(rawUrl).toString();
   let facts: SiteDesignFacts | null = null;
   let fetchError: string | null = null;
@@ -173,7 +174,7 @@ export async function addSiteReference(db: SupabaseClient, org: string, business
   }
   const host = new URL(url).hostname.replace(/^www\./, "");
   const { error } = await db.from("design_references").insert({
-    organisation_id: org, business_id: businessId, source: /dribbble|behance|awwwards|land-book|siteinspire/i.test(host) ? "gallery" : "manual", kind: "site",
+    organisation_id: org, business_id: businessId, source: sourceOverride ?? (/dribbble|behance|awwwards|land-book|siteinspire/i.test(host) ? "gallery" : "manual"), kind: "site",
     url, image_url: safeImageUrl(facts?.previewImage), title: facts?.title?.slice(0, 200) ?? host, attribution: host,
     licence_note: "Reference only. Do not reproduce layouts, imagery, logos or wording.",
     analysis: { notes: notes ?? undefined, facts: facts ?? undefined, fetch_error: fetchError ?? undefined }, created_by: actorId,
@@ -222,6 +223,42 @@ export async function setVerdict(db: SupabaseClient, org: string, referenceId: s
   const { error, count } = await db.from("design_references").update({ verdict }, { count: "exact" }).eq("id", referenceId).eq("organisation_id", org);
   if (error) throw error;
   if (!count) throw new Error("Reference not found.");
+}
+
+/**
+ * Find example sites with Claude's web search, then let a tool-less agent choose up to six
+ * from the addresses the search really returned. Each is added like a site the team added.
+ */
+export async function discoverSites(db: SupabaseClient, org: string, business: StudioBusiness, studio: Studio, actorId: string): Promise<{ added: number; note: string }> {
+  if (!aiAvailable()) return { added: 0, note: "Finding sites needs Claude. Add your Anthropic key under Integrations, or add sites yourself." };
+  const { data: o } = await db.from("organisations").select("monthly_ai_budget_usd").eq("id", org).single();
+  const spent = await monthToDateSpend(db, org);
+  if (o && spent >= Number(o.monthly_ai_budget_usd)) return { added: 0, note: `Monthly AI budget reached ($${spent.toFixed(2)} of $${o.monthly_ai_budget_usd}).` };
+
+  const industryLabel = industryById(business.industry_id)?.label ?? business.category ?? "local business";
+  const search = await runWebSearch({
+    agent: "design_research_search", organisationId: org, db,
+    system: RESEARCH_SEARCH_SYSTEM,
+    prompt: `Find well-designed websites of independent ${industryLabel.toLowerCase()} (ideally in country ${business.country_code}).${studio.idea ? ` The designer is after: ${studio.idea}` : ""}`,
+    maxUses: 5, blockedDomains: RESEARCH_BLOCKED_DOMAINS, countryCode: business.country_code,
+  });
+  const existing = new Set((await loadReferences(db, org, business)).map((r) => r.url.replace(/\/$/, "")));
+  const candidates = chooseResearchHits(search.hits, existing);
+  if (!candidates.length) return { added: 0, note: `The search found no new usable sites (${search.searches} searches, about $${search.costUsd.toFixed(2)}).` };
+
+  const pick = await runResearchPickAgent({ db, organisationId: org, industryLabel, idea: studio.idea, hits: candidates, searchNotes: search.text });
+  const chosen = [...new Map(pick.output.picks.filter((p) => p.index < candidates.length).map((p) => [p.index, p])).values()].slice(0, 6);
+  let added = 0;
+  for (const p of chosen) {
+    try {
+      await addSiteReference(db, org, business.id, candidates[p.index].url, `Found by web search: ${p.reason.slice(0, 300)}`, actorId, "web_search");
+      added++;
+    } catch {
+      /* duplicate or unsafe address: skip */
+    }
+  }
+  const cost = search.costUsd + pick.costUsd;
+  return { added, note: `Added ${added} site${added === 1 ? "" : "s"} found by web search (${search.searches} searches, about $${cost.toFixed(2)}). Love or reject them like any other reference.` };
 }
 
 // ---------------------------------------------------------------------------

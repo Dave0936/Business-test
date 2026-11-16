@@ -23,7 +23,7 @@ import { ReferenceCard } from "./reference-card";
 import { BriefView } from "./brief-view";
 import { BriefEditor } from "./brief-editor";
 import {
-  addSiteAction, answersAction, briefAction, collectPinsAction, pickAction, questionsAction, saveStudioSetup, uploadAction,
+  addSiteAction, answersAction, briefAction, collectPinsAction, discoverSitesAction, pickAction, questionsAction, saveStudioSetup, uploadAction,
 } from "../studio-actions";
 
 export const metadata: Metadata = { title: "Design studio" };
@@ -72,6 +72,7 @@ export default async function StudioPage({ params }: { params: Promise<{ busines
   const loved = refs.filter((r) => r.verdict === "loved").length;
   const rejected = refs.filter((r) => r.verdict === "rejected").length;
   const pinterestLive = status.pinterest.mode === "live";
+  const aiLive = status.anthropic.mode === "live";
   const refTitles = Object.fromEntries(refs.map((r) => [r.id, r.title ?? r.attribution ?? "Reference"]));
 
   return (
@@ -102,7 +103,11 @@ export default async function StudioPage({ params }: { params: Promise<{ busines
             </Card>
             <Card>
               <CardHeader><CardTitle className="text-base">Add a website</CardTitle><CardDescription>We read its fonts, colours and preview image.</CardDescription></CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2 border-b pb-3">
+                  <ActionButton action={discoverSitesAction} hidden={hidden} label="Find sites for me" variant="outline" disabled={!editable || !aiLive} title={aiLive ? "Claude searches the web for well-designed sites of this kind (up to 5 searches, usually under $0.20)" : "Needs Claude: add your Anthropic key under Integrations"} />
+                  <span className="text-xs text-muted-foreground">{aiLive ? "Up to 6 sites via web search. Usually under $0.20." : "Needs Claude to be connected."}</span>
+                </div>
                 <ActionForm action={addSiteAction} submitLabel="Add site" disabled={!editable} className="space-y-2">
                   <input type="hidden" name="businessId" value={businessId} />
                   <Input name="url" type="url" required placeholder="https://…" aria-label="Website address" />

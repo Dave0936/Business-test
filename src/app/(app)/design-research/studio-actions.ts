@@ -3,7 +3,7 @@ import { z } from "zod";
 import { guarded, str, type ActionState } from "@/lib/actions";
 import { writeAudit } from "@/lib/audit-log";
 import {
-  addSiteReference, addUploadReference, collectPins, getOrCreateStudio, loadBusiness, pickReferences,
+  addSiteReference, addUploadReference, collectPins, discoverSites, getOrCreateStudio, loadBusiness, pickReferences,
   prepareQuestions, produceStudioBrief, saveAnswers, saveEditedBrief, setVerdict, updateStudio,
 } from "@/lib/design/studio";
 import { SITE_TYPE_IDS } from "@/lib/design/studio-rules";
@@ -148,5 +148,15 @@ export async function saveBriefAction(_p: ActionState, form: FormData): Promise<
     const r = await saveEditedBrief(ctx.supabase, ctx.organisationId, businessId, studio.id, next, ctx.user.id);
     await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "design.brief_edited", entityType: "design_brief", entityId: r.briefId, data: { business_id: businessId } });
     return r.adjustments.length ? `Saved as a new version. Adjusted for contrast: ${r.adjustments.join(" ")}` : "Saved as a new version.";
+  }, path(id));
+}
+
+export async function discoverSitesAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  const id = str(form, "businessId");
+  return guarded("staff", async (ctx) => {
+    const { business, studio } = await open(ctx, form);
+    const r = await discoverSites(ctx.supabase, ctx.organisationId, business, studio, ctx.user.id);
+    if (r.added) await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "design.sites_found_by_search", entityType: "business", entityId: business.id, data: { added: r.added } });
+    return r.note;
   }, path(id));
 }

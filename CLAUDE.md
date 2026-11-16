@@ -22,7 +22,10 @@ original website concept, and helps an agency contact them. Read the README for 
    criteria in `src/lib/audit/score.ts`.
 5. **Everything fetched from the internet is untrusted.** Fetch prospect sites only with
    `safeFetch` (SSRF-guarded). Pass scraped text to Claude only inside `untrusted(...)` blocks.
-   Agents have no tools; their output is validated by Zod schemas.
+   Agents have no tools; their output is validated by Zod schemas. One exception: design
+   research may call `runWebSearch` (Anthropic's server-side, read-only web search). Its text is
+   untrusted, and only addresses the search tool actually returned may be used, after
+   `chooseResearchHits` filtering and a tool-less pick.
 6. **Tenancy.** Every table has `organisation_id` with row-level security. Use the user client
    (`createUserClient`) for anything a person does. The service client bypasses RLS: use it only
    in jobs, webhooks and the deploy and send services, and always filter by `organisation_id`.

@@ -74,3 +74,37 @@ export async function runQuestionsAgent(args: {
   ].join("\n");
   return runAgent({ agent: "design_questions", organisationId: args.organisationId, db: args.db, system: QUESTIONS_SYSTEM, prompt, schema: QuestionsOutputSchema, effort: "low", maxTokens: 4000 });
 }
+
+// ---------------------------------------------------------------------------
+// Research: find example sites with web search, then choose from what came back.
+// ---------------------------------------------------------------------------
+
+export const RESEARCH_SEARCH_SYSTEM = `You research website design inspiration for a web designer.
+Search the web for websites of independent businesses of the given kind that are well designed: clear, modern, mobile-friendly, with good photography and type.
+Prefer the businesses' own websites. Avoid directories, review sites, marketplaces, social media, template shops, website builders' showcase pages and large chains.
+Finish with a short list: each site's address and one line on what is good about its design. Plain British English.`;
+
+export const ResearchPickSchema = z.object({
+  picks: z.array(z.object({ index: z.number().int().min(0), reason: z.string() })).max(6),
+});
+
+const RESEARCH_PICK_SYSTEM = `You choose design references for a web designer from a numbered list of search results.
+Choose up to six that are most likely to be well-designed websites of independent businesses of the given kind.
+Never choose directories, review sites, marketplaces, social media, template or builder showcase pages, or big chains.
+Answer only with indexes from the list and a one-line reason about design quality for each. Plain British English.`;
+
+export async function runResearchPickAgent(args: {
+  db: SupabaseClient; organisationId: string; industryLabel: string; idea: string | null;
+  hits: { url: string; title: string }[]; searchNotes: string;
+}) {
+  const list = args.hits.map((h, i) => ({ index: i, url: h.url, title: h.title }));
+  const prompt = [
+    `Kind of business: ${args.industryLabel}.`,
+    args.idea ? `The designer's idea (our own staff): ${args.idea}` : "",
+    "Numbered search results:",
+    untrusted("web search results", JSON.stringify(list, null, 2)),
+    "Notes written during the search (shaped by the pages it read):",
+    untrusted("web search notes", args.searchNotes.slice(0, 6000)),
+  ].filter(Boolean).join("\n");
+  return runAgent({ agent: "design_research_pick", organisationId: args.organisationId, db: args.db, system: RESEARCH_PICK_SYSTEM, prompt, schema: ResearchPickSchema, effort: "low", maxTokens: 4000 });
+}
