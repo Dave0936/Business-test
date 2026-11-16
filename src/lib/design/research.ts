@@ -45,7 +45,7 @@ export async function collectReferences(db: SupabaseClient, organisationId: stri
   return { added: rows.length, note };
 }
 
-export async function produceBrief(db: SupabaseClient, organisationId: string, businessId: string, actorId?: string | null): Promise<{ briefId: string; generatedBy: "ai" | "demo"; adjustments: string[] }> {
+export async function produceBrief(db: SupabaseClient, organisationId: string, businessId: string, actorId?: string | null, opts: { forcePreset?: boolean } = {}): Promise<{ briefId: string; generatedBy: "ai" | "demo"; adjustments: string[] }> {
   const { data: b, error } = await db.from("businesses").select("id, name, category, city, country_code, opportunity_type, industry_id, sector").eq("id", businessId).eq("organisation_id", organisationId).single();
   if (error) throw error;
 
@@ -59,7 +59,7 @@ export async function produceBrief(db: SupabaseClient, organisationId: string, b
   const industryLabel = industryById(b.industry_id)?.label ?? b.category ?? "local business";
   let brief: DesignBrief;
   let generatedBy: "ai" | "demo";
-  if (aiAvailable()) {
+  if (aiAvailable() && !opts.forcePreset) {
     const auditSummary = audit
       ? [`Current site score: ${audit.audit_score ?? "no site"}`, ...((audit.problems as { title: string; detail: string }[]) ?? []).slice(0, 8).map((p) => `- ${p.title}: ${p.detail}`)].join("\n")
       : "";

@@ -52,6 +52,8 @@ export interface ResolvedImage {
   alt: string;
   credit?: { name: string; url: string; source: "unsplash" } | null;
   kind: "photo" | "art" | "upload";
+  /** For uploads: path inside the private site-assets bucket. */
+  storagePath?: string;
 }
 
 /** The complete, renderable prototype. Stored immutably per version. */

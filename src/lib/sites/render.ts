@@ -338,11 +338,7 @@ export function renderSite(spec: SiteSpec): SiteFiles {
   for (const q of queries) {
     if (!spec.images[q]) files[artFileName(q)] = artSvg(q, spec.theme.colors);
   }
-  for (const img of Object.values(spec.images)) {
-    if (img.kind === "upload" && img.src.startsWith("assets/")) {
-      // Uploaded files are added to the bundle by the builder (binary, base64).
-    }
-  }
+  // Uploaded images (kind "upload") are added to the bundle by the builder as base64 files.
   return files;
 }
 

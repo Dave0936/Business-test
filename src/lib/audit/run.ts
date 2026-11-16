@@ -7,6 +7,7 @@ import { aiAvailable } from "@/lib/ai/client";
 import { runAuditAgent, type AuditJudgement } from "@/lib/ai/agents/audit-agent";
 import { industryById } from "@/lib/industries";
 import { mobileRenderCheck } from "./mobile-render";
+import { demoSiteHtml } from "@/lib/demo/sites";
 
 export interface BusinessRow {
   id: string;
@@ -128,16 +129,17 @@ export async function auditBusiness(db: SupabaseClient, business: BusinessRow, o
   const industry = industryById(business.industry_id ?? INDUSTRY_FROM_CATEGORY(business));
   const hasWebsite = Boolean(business.website_url);
 
-  // Demo sites use reserved .example domains: never fetched, recorded as not reachable.
+  // Demo records use reserved .example domains and are never fetched; the analyser runs
+  // on a fictional sample page instead and the result is labelled as simulated.
   const obs: Observations | null = hasWebsite
     ? business.is_demo
-      ? emptyObservations({ error: "Demo record: reserved .example domain is not fetched." })
+      ? demoObservations(business)
       : await observeWebsite(business.website_url!)
     : null;
 
   let judgement: AuditJudgement | null = null;
   let usedAi = false;
-  if (obs?.fetched && aiAvailable()) {
+  if (obs?.fetched && aiAvailable() && !business.is_demo) {
     const r = await runAuditAgent({ db, organisationId: org, business, observations: obs });
     judgement = r.output;
     usedAi = true;
@@ -171,7 +173,7 @@ export async function auditBusiness(db: SupabaseClient, business: BusinessRow, o
       observed: obs ?? { noWebsite: true },
       judgements: judgement
         ? { source: "ai", visual_quality: judgement.visual_quality, visual_quality_rationale: judgement.visual_quality_rationale, navigation_clarity: judgement.navigation_clarity, navigation_rationale: judgement.navigation_rationale, cta_assessment: judgement.cta_assessment }
-        : { source: "rule_based", note: aiAvailable() ? "No website content to judge." : "AI not configured: findings are rule-based from observed facts only." },
+        : { source: "rule_based", note: business.is_demo ? "Demo record: analysed a fictional sample page; no AI judgement." : aiAvailable() ? "No website content to judge." : "AI not configured: findings are rule-based from observed facts only." },
       audit_score: score.auditScore,
       problems: findings.problems,
       improvements: findings.improvements,
@@ -200,7 +202,10 @@ export async function auditBusiness(db: SupabaseClient, business: BusinessRow, o
     status: score.qualified ? "qualified" : "not_qualified",
   };
   // Fill contact details only from the business's own website (published by them).
-  if (!business.email && publicEmail) patch.email = publicEmail;
+  if (!business.email && publicEmail) {
+    patch.email = publicEmail;
+    patch.email_source = "business_website";
+  }
   if (!business.contact_page_url && obs?.contactPageUrl) patch.contact_page_url = obs.contactPageUrl;
   const est = industry?.typicalProjectValue;
   if (est && score.qualified) patch.estimated_value = est;
@@ -218,6 +223,19 @@ export async function auditBusiness(db: SupabaseClient, business: BusinessRow, o
   });
 
   return { auditId: audit.id, score, usedAi };
+}
+
+function demoObservations(b: BusinessRow): Observations {
+  const i = Number((b.website_url ?? "").match(/-(\d+)\.example/)?.[1] ?? 0);
+  const pattern = i % 4 === 1 ? 1 : i % 8 === 2 ? 2 : 3;
+  const url = b.website_url!;
+  const html = demoSiteHtml(pattern, b.name);
+  return {
+    ...emptyObservations({ fetched: true, finalUrl: url, httpStatus: 200, https: url.startsWith("https:"), pageBytes: html.length, linksChecked: 0 }),
+    ...analyseHtml(html, url),
+    error: null,
+    simulated: true,
+  } as Observations;
 }
 
 function sameSite(email: string, website: string | null): boolean {

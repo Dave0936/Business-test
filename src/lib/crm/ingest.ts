@@ -61,7 +61,7 @@ export async function ingestDiscovered(
       };
       fill("website_url", ownSite);
       fill("website_domain", id.domain);
-      fill("email", email);
+      if (email && !match.email) { patch.email = email; patch.email_source = "listing"; }
       fill("phone", rec.phone);
       fill("phone_e164", id.phoneE164);
       fill("address", rec.address);
@@ -95,6 +95,7 @@ export async function ingestDiscovered(
           website_url: ownSite,
           website_domain: id.domain,
           email,
+          email_source: email ? (rec.isDemo ? "manual" : "listing") : "unknown",
           phone: rec.phone,
           phone_e164: id.phoneE164,
           contact_page_url: rec.contactPageUrl,

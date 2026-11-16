@@ -1,3 +1,6 @@
+// Per-user, per-request: never prerender (auth state and env are read at request time).
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { getOrgContext } from "@/lib/auth";

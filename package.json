@@ -1,12 +1,18 @@
 {
-  "name": "app",
+  "name": "webopportunity-ai",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:db": "./scripts/test-db.sh",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "db:push": "supabase db push",
+    "db:reset": "supabase db reset"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
@@ -38,6 +44,7 @@
     "svix": "^2.10.0",
     "tailwind-merge": "^3.7.0",
     "undici": "^8.12.4",
+    "wrangler": "^4.162.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -57,5 +64,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=20.9"
   }
 }

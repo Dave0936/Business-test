@@ -1,3 +1,6 @@
+// Per-user, per-request: never prerender (auth state and env are read at request time).
+export const dynamic = "force-dynamic";
+
 import type { Metadata } from "next";
 import { supabaseConfigured } from "@/lib/env";
 import { redirect } from "next/navigation";

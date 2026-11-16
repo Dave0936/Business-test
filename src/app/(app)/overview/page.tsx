@@ -7,6 +7,10 @@ import { StatCard } from "@/components/app/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatDate, formatMoney } from "@/lib/utils";
+import { ActionButton } from "@/components/app/action-button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { canApprove } from "@/lib/auth";
+import { loadDemoData } from "./actions";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -14,7 +18,8 @@ type Metrics = Record<string, number>;
 
 export default async function OverviewPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
   const filters = parseFilters(await searchParams);
-  const { supabase, organisationId } = await getOrgContext();
+  const ctx = await getOrgContext();
+  const { supabase, organisationId } = ctx;
 
   const [{ data: m, error }, { data: activity }, { data: runs }] = await Promise.all([
     supabase.rpc("dashboard_metrics", { p_org: organisationId, ...toRpcFilters(filters) }),
@@ -43,6 +48,15 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         description="Your pipeline from discovery to signed client. Figures respect the filters below."
         actions={<Button asChild><Link href="/opportunities">Find opportunities</Link></Button>}
       />
+      {n("discovered") === 0 && !Object.values(filters).some(Boolean) && (
+        <Alert variant="info" className="mb-5">
+          <AlertTitle>Your workspace is empty</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>Run a real search, or load fictional demo data to explore. Demo data runs the real audit, scoring, design and prototype pipeline on made-up businesses. It never contacts anyone and is labelled “Demo” everywhere.</span>
+            {canApprove(ctx.role) && <ActionButton action={loadDemoData} label="Load demo data" pendingLabel="Running pipeline…" />}
+          </AlertDescription>
+        </Alert>
+      )}
       <FilterBar values={filters} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
