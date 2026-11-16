@@ -6,7 +6,7 @@ import {
   addSiteReference, addUploadReference, collectPins, discoverSites, getOrCreateStudio, loadBusiness, pickReferences,
   prepareQuestions, produceStudioBrief, saveAnswers, saveEditedBrief, setVerdict, updateStudio,
 } from "@/lib/design/studio";
-import { SITE_TYPE_IDS } from "@/lib/design/studio-rules";
+import { MAX_EXTRA_LANGUAGES, SITE_LANGUAGES, SITE_TYPE_IDS } from "@/lib/design/studio-rules";
 import { FONT_CHOICES } from "@/lib/design/brief";
 
 const Id = z.string().uuid();
@@ -25,9 +25,11 @@ export async function saveStudioSetup(_p: ActionState, form: FormData): Promise<
     const { studio } = await open(ctx, form);
     const siteType = z.enum(SITE_TYPE_IDS as [string, ...string[]]).parse(str(form, "siteType"));
     const idea = str(form, "idea").slice(0, 600) || null;
+    const languages = [...new Set(form.getAll("languages").map(String))].filter((l) => l in SITE_LANGUAGES);
+    if (languages.length > MAX_EXTRA_LANGUAGES) throw new Error(`Choose up to ${MAX_EXTRA_LANGUAGES} extra languages.`);
     const typeChanged = siteType !== studio.site_type;
     // A new type means new sections, so earlier picks and questions no longer fit.
-    await updateStudio(ctx.supabase, studio, { site_type: siteType as typeof studio.site_type, idea, ...(typeChanged ? { picks: [], picked_by: null, questions: [], questions_by: null } : {}) });
+    await updateStudio(ctx.supabase, studio, { site_type: siteType as typeof studio.site_type, idea, languages, ...(typeChanged ? { picks: [], picked_by: null, questions: [], questions_by: null } : {}) });
     return typeChanged ? "Saved. The site type changed, so pick references again." : "Saved.";
   }, path(id));
 }

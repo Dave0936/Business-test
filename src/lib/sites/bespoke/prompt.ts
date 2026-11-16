@@ -7,7 +7,7 @@ How you work:
 - Use the tools to write files, then run check_site. Fix every problem it reports and check again. Call finish only when the check passes.
 - Write complete files each time. Keep pages lean: no frameworks, no build step, no external scripts.
 
-Files: up to 8 pages (index.html first; lowercase names like about.html), one styles.css, one script.js.
+Files: up to 8 pages per language (index.html first; lowercase names like about.html), one styles.css, one script.js. Translations, when asked for, go in a folder per language code with the same file names (fr/index.html) and use ../styles.css and ../script.js.
 
 Every page must:
 - start with <!doctype html>, have <html lang="..."> in the site language, <meta charset="utf-8">, <meta name="viewport" content="width=device-width, initial-scale=1"> (never disable zoom), a unique <title> of at most 65 characters, a meta description of at most 160 characters and an og:title;
@@ -32,6 +32,8 @@ Copy: plain, specific, warm and short. Write in the site language. No filler and
 export interface BuildContext {
   business: { name: string; industryLabel: string; city: string | null; countryCode: string; bookingRelevant: boolean };
   language: string;
+  /** Extra languages: translated copies in folders, with a language switcher. */
+  extraLanguages?: { code: string; name: string }[];
   available: { phone: boolean; email: boolean; address: boolean };
   brief: DesignBrief;
   picks: { section: string; reason: string }[];
@@ -46,6 +48,9 @@ export function buildBrief(ctx: BuildContext): { trusted: string; untrustedSiteT
     `Build a concept website for ${ctx.business.name}, ${ctx.business.industryLabel}${ctx.business.city ? ` in ${ctx.business.city}` : ""} (${ctx.business.countryCode}). Site language: ${ctx.language}.`,
     `Verified details available for placeholders: phone ${ctx.available.phone ? "yes" : "NO"}, email ${ctx.available.email ? "yes" : "NO"}, address ${ctx.available.address ? "yes" : "NO"}. {{BUSINESS_NAME}} and {{CITY}} are ${ctx.business.city ? "available" : "available (city: NO)"}.`,
     ctx.business.bookingRelevant ? "Customers in this sector expect to book or reserve: include a booking request form." : "Include an enquiry form.",
+    ctx.extraLanguages?.length
+      ? `Also build the whole site in ${ctx.extraLanguages.map((l) => `${l.name} (folder ${l.code}/, lang="${l.code}")`).join(" and ")}: the same pages and file names, translated naturally by a native-level writer (not word for word), with the same placeholders. Add a small language switcher to every page that links to the same page in each language, labelled with each language's own name.`
+      : "",
     "Design brief (from our designer; follow it):",
     JSON.stringify({
       positioning: b.positioning, audience: b.audience, visual_direction: b.visual_direction, mood: b.mood_words,

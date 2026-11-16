@@ -78,9 +78,11 @@ export function selfHostFonts(input: SiteFiles, manifest: FontManifest, load: Fo
   for (const f of htmlFiles) {
     const $ = cheerio.load(files[f] as string);
     $('link[href*="fonts.googleapis.com"], link[href*="fonts.gstatic.com"]').remove();
+    // Pages in language folders (fr/index.html) need a path back to the site root.
+    const href = `${"../".repeat(f.split("/").length - 1)}fonts/fonts.css`;
     const first = $('link[rel="stylesheet"]').first();
-    if (first.length) first.before('<link rel="stylesheet" href="fonts/fonts.css">');
-    else $("head").append('<link rel="stylesheet" href="fonts/fonts.css">');
+    if (first.length) first.before(`<link rel="stylesheet" href="${href}">`);
+    else $("head").append(`<link rel="stylesheet" href="${href}">`);
     files[f] = $.html();
   }
   // Fonts are now local: tighten the policy so the site never contacts Google.

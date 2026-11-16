@@ -64,7 +64,13 @@ try {
   check("studio opens with a default site type for a restaurant", (await page.locator("#siteType").inputValue()) === "menu");
   const setup = page.locator("form:has(#siteType)");
   await page.fill("#idea", "Warm neighbourhood bistro, candlelit evenings, simple menu");
+  for (const code of ["fr", "cy", "de"]) await page.check(`input[name="languages"][value="${code}"]`);
+  check("more than two extra languages is refused", /up to 2 extra languages/.test(await submit(setup)));
+  await page.uncheck('input[name="languages"][value="de"]');
   check("idea saved", /Saved/.test(await submit(setup)));
+  await page.goto(studioUrl);
+  const langs = await page.locator('input[name="languages"]:checked').evaluateAll((els) => els.map((e) => e.value));
+  check("extra languages saved", JSON.stringify(langs) === JSON.stringify(["fr", "cy"]), langs.join(","));
 
   // References: three sites (unreachable .invalid, saved as links) and two pictures.
   const siteForm = page.locator("form:has(input[name=url])");
@@ -121,7 +127,7 @@ try {
   await page.getByRole("button", { name: "Prepare questions" }).click();
   await page.waitForTimeout(1500);
   await page.goto(studioUrl);
-  const qs = page.locator("fieldset > legend");
+  const qs = page.locator('fieldset:has(input[name^="q_"]) > legend');
   check("five standard questions", (await qs.count()) === 5);
   await page.getByLabel("Photo beside the headline").check();
   await page.getByLabel("Cool", { exact: true }).check();

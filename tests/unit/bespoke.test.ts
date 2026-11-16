@@ -179,3 +179,50 @@ describe("a scripted build, turn by turn", () => {
     expect(String(messages.at(-1)!.content)).toMatch(/cut off/);
   });
 });
+
+describe("multi-language sites", () => {
+  const fr = (html: string) => html
+    .replace('lang="en-GB"', "")
+    .replaceAll('href="styles.css"', 'href="../styles.css"').replaceAll('src="script.js"', 'src="../script.js"')
+    .replaceAll('href="index.html"', 'href="../index.html"')
+    .replace("Seasonal cooking by the harbour", "Cuisine de saison au bord du port")
+    .replace("Book a table", "Réserver une table");
+  const BILINGUAL = { ...GOOD, "fr/index.html": fr(GOOD["index.html"]).replace('<a href="contact.html">Réserver', '<a href="contact.html">Réserver'), "fr/contact.html": fr(GOOD["contact.html"]) };
+
+  it("a site with a French copy in fr/ passes the checks", () => {
+    const r = makeChecker(CTX, SPEC)(BILINGUAL);
+    expect(r.failures).toEqual([]);
+  });
+  it("broken links inside a language folder are still caught", () => {
+    const broken = { ...BILINGUAL, "fr/index.html": BILINGUAL["fr/index.html"].replace('href="contact.html"', 'href="tarifs.html"') };
+    expect(makeChecker(CTX, SPEC)(broken).failures.join(" ")).toMatch(/fr\/index\.html: link to missing page tarifs\.html/);
+  });
+  it("pages in a folder get that language when the model leaves lang out", () => {
+    const { files } = assembleBespoke(BILINGUAL, CTX);
+    expect(files["fr/index.html"]).toMatch(/<html lang="fr"/);
+    expect(files["index.html"]).toMatch(/<html lang="en-GB"/);
+  });
+  it("only two-letter language folders are allowed, and the page limit grows per language", () => {
+    expect(isAllowedSourcePath("fr/index.html")).toBe(true);
+    expect(isAllowedSourcePath("fr/sub/index.html")).toBe(false);
+    expect(isAllowedSourcePath("../fr/index.html")).toBe(false);
+    expect(isAllowedSourcePath("french/index.html")).toBe(false);
+    const s: DraftState = { source: {}, lastCheck: null, dirtySinceCheck: true, finished: null, maxPages: 16 };
+    const check = makeChecker(CTX, SPEC);
+    for (let i = 0; i < 16; i++) executeBuildTool(s, "write_file", { path: i < 8 ? `p${i}.html` : `fr/p${i}.html`, content: "<p>x</p>" }, check);
+    expect(Object.keys(s.source)).toHaveLength(16);
+    expect(executeBuildTool(s, "write_file", { path: "fr/extra.html", content: "x" }, check).content).toMatch(/already has 16 pages/);
+  });
+});
+
+describe("resolving paths in the checks", () => {
+  it("handles folders, parents, roots and escapes", async () => {
+    const { resolveSitePath } = await import("@/lib/qa/checks");
+    expect(resolveSitePath("fr/index.html", "../styles.css")).toBe("styles.css");
+    expect(resolveSitePath("fr/index.html", "contact.html")).toBe("fr/contact.html");
+    expect(resolveSitePath("index.html", "fr/")).toBe("fr/index.html");
+    expect(resolveSitePath("fr/index.html", "/about.html")).toBe("about.html");
+    expect(resolveSitePath("index.html", "../../etc/passwd")).toBeNull();
+    expect(resolveSitePath("index.html", "contact.html?x=1")).toBe("contact.html");
+  });
+});

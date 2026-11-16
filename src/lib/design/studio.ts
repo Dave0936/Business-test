@@ -31,6 +31,7 @@ export interface Studio {
   questions: StudioQuestion[];
   questions_by: "ai" | "preset" | null;
   pinterest_bookmark: string | null;
+  languages?: string[];
 }
 
 export interface StudioBusiness {

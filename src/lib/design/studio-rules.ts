@@ -16,6 +16,11 @@ export const SITE_TYPES = {
   shop: { label: "Shop window", sections: ["Hero", "Products", "Story", "Delivery and collection", "Contact"] },
 } as const;
 export type SiteType = keyof typeof SITE_TYPES;
+
+/** Languages a site can be built in (extra languages become translated copies in folders). */
+export const SITE_LANGUAGES = { en: "English", fr: "French", de: "German", es: "Spanish", it: "Italian", nl: "Dutch", pt: "Portuguese", pl: "Polish", cy: "Welsh", ga: "Irish" } as const;
+export type SiteLanguage = keyof typeof SITE_LANGUAGES;
+export const MAX_EXTRA_LANGUAGES = 2;
 export const SITE_TYPE_IDS = Object.keys(SITE_TYPES) as SiteType[];
 
 /** Default type from the industry, its sector group, or failing those the free-text category. */

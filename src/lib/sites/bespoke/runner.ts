@@ -9,7 +9,8 @@ import { enqueue } from "@/lib/jobs/queue";
 import { loadContext, resolveImages, saveVersion, slugify, themeFromBrief } from "../builder";
 import { generatedImagesFor } from "../generated-images";
 import type { ResolvedImage, SiteSpec } from "../spec";
-import { assembleBespoke, type AssembleContext } from "./assemble";
+import { MAX_PAGES, assembleBespoke, type AssembleContext } from "./assemble";
+import { SITE_LANGUAGES, type SiteLanguage } from "@/lib/design/studio-rules";
 import { makeChecker } from "./check";
 import { BUILD_TOOLS, type CheckOutcome, type DraftState } from "./tools";
 import { applyTurn } from "./loop";
@@ -66,7 +67,7 @@ async function buildContext(db: SupabaseClient, org: string, businessId: string,
   const brief = briefRow.brief;
   const language = business.language ?? COUNTRIES.find((c) => c.code === business.country_code)?.language ?? "en";
   const images = { ...(await resolveImages(db, org, brief.image_queries ?? [])), ...(await generatedImagesFor(db, org, businessId)) };
-  const { data: studio } = await db.from("design_studios").select("picks").eq("business_id", businessId).eq("organisation_id", org).maybeSingle();
+  const { data: studio } = await db.from("design_studios").select("picks, languages").eq("business_id", businessId).eq("organisation_id", org).maybeSingle();
   const { data: audit } = await db.from("website_audits").select("observed").eq("business_id", businessId).eq("organisation_id", org).order("created_at", { ascending: false }).limit(1).maybeSingle();
   const assemble: AssembleContext = {
     facts: { name: business.name, phone: business.phone, email: business.email, address: business.address, city: business.city, language },
@@ -81,7 +82,8 @@ async function buildContext(db: SupabaseClient, org: string, businessId: string,
     agency: { name: assemble.agencyName, website: o.agency_website, email: o.agency_reply_email },
     images, slug: "", generatedBy: "ai",
   };
-  return { business, industry, briefRow, brief, language, images, picks: ((studio?.picks ?? []) as { section: string; reason: string }[]), siteText: (audit?.observed as { textExcerpt?: string } | null)?.textExcerpt ?? null, assemble, spec };
+  const extraLanguages = ((studio?.languages ?? []) as string[]).filter((l) => l !== language.slice(0, 2) && l in SITE_LANGUAGES).map((code) => ({ code, name: SITE_LANGUAGES[code as SiteLanguage] }));
+  return { business, industry, briefRow, brief, language, images, extraLanguages, picks: ((studio?.picks ?? []) as { section: string; reason: string }[]), siteText: (audit?.observed as { textExcerpt?: string } | null)?.textExcerpt ?? null, assemble, spec };
 }
 
 function imageList(images: Record<string, ResolvedImage>) {
@@ -109,6 +111,7 @@ export async function startBuild(db: SupabaseClient, org: string, businessId: st
   const { trusted, untrustedSiteText } = buildBrief({
     business: { name: ctx.business.name, industryLabel: ctx.industry?.label ?? ctx.business.category ?? "local business", city: ctx.business.city, countryCode: ctx.business.country_code, bookingRelevant: ctx.industry?.bookingRelevant ?? false },
     language: ctx.language,
+    extraLanguages: ctx.extraLanguages,
     available: { phone: Boolean(ctx.business.phone), email: Boolean(ctx.business.email), address: Boolean(ctx.business.address) },
     brief: ctx.brief, picks: ctx.picks, images: imageList(ctx.images), existingSiteText: ctx.siteText,
   });
@@ -157,7 +160,7 @@ export async function runBuildSlice(db: SupabaseClient, buildId: string, opts: {
   const ctx = await buildContext(db, org, build.business_id, build.created_by);
   const check = makeChecker(ctx.assemble, ctx.spec, localAssets(ctx.images));
 
-  const state: DraftState = { source: { ...build.source }, lastCheck: build.last_check?.outcome ?? null, dirtySinceCheck: build.last_check?.dirty ?? true, finished: null };
+  const state: DraftState = { maxPages: MAX_PAGES * (1 + ctx.extraLanguages.length), source: { ...build.source }, lastCheck: build.last_check?.outcome ?? null, dirtySinceCheck: build.last_check?.dirty ?? true, finished: null };
   const messages = [...build.messages];
   const activity = [...build.activity];
   let turns = build.turns;

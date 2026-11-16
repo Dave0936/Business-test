@@ -8,9 +8,11 @@ import type { SiteFiles } from "../spec";
  * so nothing is ever invented to fill a gap. Every page gets the concept notice.
  */
 
+/** Pages per language; extra languages live in folders such as fr/. */
 export const MAX_PAGES = 8;
+export const MAX_TOTAL_PAGES = MAX_PAGES * 3;
 export const MAX_FILE_BYTES = 150_000;
-const HTML_RE = /^[a-z0-9][a-z0-9-]{0,23}\.html$/;
+const HTML_RE = /^(?:[a-z]{2}\/)?[a-z0-9][a-z0-9-]{0,23}\.html$/;
 
 export function isAllowedSourcePath(path: string): boolean {
   return HTML_RE.test(path) || path === "styles.css" || path === "script.js";
@@ -96,8 +98,8 @@ export function assembleBespoke(source: Record<string, string>, ctx: AssembleCon
   const needs: Record<string, string | null> = { phone: f.phone, email: f.email, address: f.address, city: f.city };
 
   const pages = Object.keys(source).filter((p) => HTML_RE.test(p)).sort();
-  if (pages.length > MAX_PAGES) notes.push(`Only the first ${MAX_PAGES} pages were kept.`);
-  for (const path of pages.slice(0, MAX_PAGES)) {
+  if (pages.length > MAX_TOTAL_PAGES) notes.push(`Only the first ${MAX_TOTAL_PAGES} pages were kept.`);
+  for (const path of pages.slice(0, MAX_TOTAL_PAGES)) {
     const $ = cheerio.load(source[path]);
     // Remove anything that needs a fact we do not have, rather than inventing it.
     $("[data-needs]").each((_, el) => {
@@ -105,7 +107,8 @@ export function assembleBespoke(source: Record<string, string>, ctx: AssembleCon
       if (keys.some((k) => !needs[k])) $(el).remove();
       else $(el).removeAttr("data-needs");
     });
-    if ($("html").attr("lang") === undefined) $("html").attr("lang", f.language);
+    const folder = path.includes("/") ? path.split("/")[0] : null;
+    if ($("html").attr("lang") === undefined) $("html").attr("lang", folder ?? f.language);
     if ($('meta[name="robots"]').length === 0) $("head").append('<meta name="robots" content="noindex, nofollow">');
     $(".concept-bar, .concept-legal").remove(); // only ours, with the exact wording
     $("body").prepend(`<div class="concept-bar" role="note">Independent website concept created by ${esc(ctx.agencyName)}. It has not been commissioned or endorsed by ${esc(f.name)}.</div>`);

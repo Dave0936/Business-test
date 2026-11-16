@@ -27,6 +27,23 @@ const CLAIM_PATTERNS: [RegExp, string][] = [
 const PHONE_RE = /(\+?\d[\d\s().-]{7,}\d)/g;
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
+/** Resolve a link or asset path relative to the page that uses it (pages may sit in language folders). */
+export function resolveSitePath(fromFile: string, ref: string): string | null {
+  const clean = ref.split(/[?#]/)[0];
+  const dir = fromFile.includes("/") ? fromFile.slice(0, fromFile.lastIndexOf("/") + 1) : "";
+  const joined = clean.startsWith("/") ? clean.slice(1) : dir + clean;
+  const out: string[] = [];
+  for (const part of joined.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") {
+      if (!out.length) return null;
+      out.pop();
+    } else out.push(part);
+  }
+  const resolved = out.join("/");
+  return clean.endsWith("/") || resolved === "" ? `${resolved ? `${resolved}/` : ""}index.html` : resolved;
+}
+
 function asText(f: SiteFiles[string] | undefined): string | null {
   return typeof f === "string" ? f : null;
 }
@@ -76,8 +93,8 @@ export function runQaChecks(files: SiteFiles, spec: SiteSpec, ctx: QaContext): Q
         if (/^https:\/\//i.test(href)) return;
         if (/^http:\/\//i.test(href)) return void broken.push(`${file}: insecure link ${href}.`);
         const [path, hash] = href.split("#");
-        const target = path === "" ? file : path;
-        if (!files[target]) return void broken.push(`${file}: link to missing page ${href}.`);
+        const target = path === "" ? file : resolveSitePath(file, path);
+        if (!target || !files[target]) return void broken.push(`${file}: link to missing page ${href}.`);
         if (hash) {
           const t$ = docs.find((d) => d.file === target)?.$;
           if (t$ && t$(`#${hash.replace(/[^\w-]/g, "")}`).length === 0) broken.push(`${file}: anchor #${hash} not found on ${target}.`);
@@ -90,7 +107,8 @@ export function runQaChecks(files: SiteFiles, spec: SiteSpec, ctx: QaContext): Q
           return;
         }
         if (/^data:/.test(ref)) return;
-        if (!files[ref.replace(/^\.?\//, "")]) missing.push(`${file}: missing asset ${ref}`);
+        const target = resolveSitePath(file, ref);
+        if (!target || !files[target]) missing.push(`${file}: missing asset ${ref}`);
       });
     }
     add("links", "Broken links", broken);
@@ -159,7 +177,7 @@ export function runQaChecks(files: SiteFiles, spec: SiteSpec, ctx: QaContext): Q
       $("script").each((_, el) => {
         const src = $(el).attr("src");
         const type = $(el).attr("type");
-        if (src && src !== "script.js") f.push(`${file}: unexpected script ${src}.`);
+        if (src && resolveSitePath(file, src) !== "script.js") f.push(`${file}: unexpected script ${src}.`);
         if (!src && type !== "application/ld+json") f.push(`${file}: inline script.`);
       });
       $("*").each((_, el) => {

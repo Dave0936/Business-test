@@ -50,3 +50,11 @@ describe("self-hosted fonts", () => {
     expect(css).toMatch(/font-weight:400/);
   });
 });
+
+describe("fonts in language folders", () => {
+  it("link back to the site root", () => {
+    const { files } = selfHostFonts({ "index.html": page("https://fonts.googleapis.com/css2?family=Inter"), "fr/index.html": page("https://fonts.googleapis.com/css2?family=Inter") }, manifest, fakeLoad);
+    expect(files["index.html"]).toMatch(/href="fonts\/fonts\.css"/);
+    expect(files["fr/index.html"]).toMatch(/href="\.\.\/fonts\/fonts\.css"/);
+  });
+});

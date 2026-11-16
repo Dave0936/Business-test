@@ -61,6 +61,8 @@ export interface DraftState {
   lastCheck: CheckOutcome | null;
   dirtySinceCheck: boolean;
   finished: { summary: string; suggestions: string[] } | null;
+  /** Page limit for this build (8 per language). */
+  maxPages?: number;
 }
 
 export interface ToolOutcome {
@@ -75,10 +77,11 @@ export function executeBuildTool(state: DraftState, name: string, input: Record<
     case "write_file": {
       const path = String(input.path ?? "").trim();
       const content = String(input.content ?? "");
-      if (!isAllowedSourcePath(path)) return err(`"${path}" is not an allowed file name. Use pages like about.html, plus styles.css and script.js.`, `Refused file name ${path}`);
+      if (!isAllowedSourcePath(path)) return err(`"${path}" is not an allowed file name. Use pages like about.html (or fr/about.html for a translation), plus styles.css and script.js.`, `Refused file name ${path}`);
       if (Buffer.byteLength(content) > MAX_FILE_BYTES) return err(`${path} is too large (limit ${MAX_FILE_BYTES / 1000} KB). Split or simplify it.`);
       const pages = Object.keys(state.source).filter((p) => p.endsWith(".html"));
-      if (path.endsWith(".html") && !state.source[path] && pages.length >= MAX_PAGES) return err(`The site already has ${MAX_PAGES} pages. Delete one first.`);
+      const limit = state.maxPages ?? MAX_PAGES;
+      if (path.endsWith(".html") && !state.source[path] && pages.length >= limit) return err(`The site already has ${limit} pages. Delete one first.`);
       const existed = path in state.source;
       state.source[path] = content;
       state.dirtySinceCheck = true;

@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { DemoBadge } from "@/components/app/badges";
 import type { DesignBrief } from "@/lib/design/brief";
 import { loadReferences, signedUploadUrls, type ReferenceRow, type Studio, type StudioBusiness } from "@/lib/design/studio";
-import { SITE_TYPES, SITE_TYPE_IDS, defaultSiteType } from "@/lib/design/studio-rules";
+import { SITE_LANGUAGES, SITE_TYPES, SITE_TYPE_IDS, defaultSiteType } from "@/lib/design/studio-rules";
 import { industryById, inferIndustryId } from "@/lib/industries";
 import { integrationStatus } from "@/lib/integrations";
 import { formatDate } from "@/lib/utils";
@@ -99,9 +99,10 @@ export default async function StudioPage({ params }: { params: Promise<{ busines
             <ActionForm action={saveStudioSetup} submitLabel="Save" disabled={!editable} className="grid gap-4 md:grid-cols-[2fr_1fr_auto] md:items-end">
               <input type="hidden" name="businessId" value={businessId} />
               <Field label="Idea (optional)" htmlFor="idea" hint="For example: “calm and premium, lots of white space, like a boutique hotel”."><Textarea id="idea" name="idea" rows={2} defaultValue={studio?.idea ?? ""} maxLength={600} /></Field>
+              <fieldset className="md:col-span-3"><legend className="mb-1 text-sm font-medium">Also build in (up to two)</legend><div className="flex flex-wrap gap-2">{Object.entries(SITE_LANGUAGES).map(([code, name]) => <label key={code} className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm has-[:checked]:border-primary has-[:checked]:bg-accent"><input type="checkbox" name="languages" value={code} defaultChecked={(studio?.languages ?? []).includes(code)} /> {name}</label>)}</div></fieldset>
               <Field label="Site type" htmlFor="siteType"><Select id="siteType" name="siteType" defaultValue={siteType}>{SITE_TYPE_IDS.map((t) => <option key={t} value={t}>{SITE_TYPES[t].label}</option>)}</Select></Field>
             </ActionForm>
-            <p className="mt-2 text-xs text-muted-foreground">Sections: {SITE_TYPES[siteType].sections.join(" · ")}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Sections: {SITE_TYPES[siteType].sections.join(" · ")}. Extra languages are set with the idea above.</p>
           </CardContent>
         </Card>
 
