@@ -70,4 +70,6 @@ tests/unit              Vitest unit tests (pure logic)
 - Build in phases; finish and test each phase before the next (see README "Roadmap").
 - Before committing, run `npm run check` (lint, types, unit tests, build) and `npm run test:db`.
 - Schema changes are new migration files only. Never edit an applied migration in production.
+- New SQL functions get no EXECUTE for `anon`/`authenticated` by default (migration 8). Grant it
+  explicitly only for functions clients must call, and add the check to `supabase/tests/30_*`.
 - Use British English in UI copy. Keep copy plain and specific.

@@ -17,7 +17,8 @@ export const metadata: Metadata = { title: "Overview" };
 type Metrics = Record<string, number>;
 
 export default async function OverviewPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
-  const filters = parseFilters(await searchParams);
+  const sp = await searchParams;
+  const filters = parseFilters(sp);
   const ctx = await getOrgContext();
   const { supabase, organisationId } = ctx;
 
@@ -48,6 +49,12 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         description="Your pipeline from discovery to signed client. Figures respect the filters below."
         actions={<Button asChild><Link href="/opportunities">Find opportunities</Link></Button>}
       />
+      {sp.demo === "loaded" && (
+        <Alert variant="success" className="mb-5">
+          <AlertTitle>Demo data loaded</AlertTitle>
+          <AlertDescription>The real audit, scoring, design and prototype pipeline ran on fictional businesses. Every demo record is labelled “Demo”, uses reserved domains and can never be emailed. Remove it any time in Settings.</AlertDescription>
+        </Alert>
+      )}
       {n("discovered") === 0 && !Object.values(filters).some(Boolean) && (
         <Alert variant="info" className="mb-5">
           <AlertTitle>Your workspace is empty</AlertTitle>

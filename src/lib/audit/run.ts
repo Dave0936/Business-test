@@ -113,7 +113,7 @@ export function ruleBasedFindings(criteria: Criterion[], industryLabel: string |
   };
   const improvements = criteria.filter((c) => c.points > 0).map((c) => ({ title: c.label, detail: fix[c.id] ?? "" }));
   const recommendations = [
-    { title: `Pages for a ${industryLabel ?? "local business"}`, detail: "Home, services, about, gallery and contact, with the main call to action visible on every screen." },
+    { title: `Pages for ${industryLabel ? `a ${industryLabel.toLowerCase().replace(/ies$/, "y").replace(/s$/, "")}` : "a local business"}`, detail: "Home, services, about, gallery and contact, with the main call to action visible on every screen." },
   ];
   return { problems, improvements, recommendations };
 }

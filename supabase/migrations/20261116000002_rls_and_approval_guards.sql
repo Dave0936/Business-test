@@ -23,12 +23,12 @@ $$;
 -- Content hashing (computed in the database, never trusted from clients)
 -- ---------------------------------------------------------------------------
 create or replace function public.email_content_hash(p_to text, p_subject text, p_body text) returns text
-language sql immutable as $$
+language sql immutable set search_path = public, extensions as $$
   select encode(digest(lower(coalesce(p_to,'')) || E'\x1f' || coalesce(p_subject,'') || E'\x1f' || coalesce(p_body,''), 'sha256'), 'hex');
 $$;
 
 create or replace function public.website_version_hash(p_spec jsonb, p_files jsonb) returns text
-language sql immutable as $$
+language sql immutable set search_path = public, extensions as $$
   select encode(digest(coalesce(p_spec::text,'') || E'\x1f' || coalesce(p_files::text,''), 'sha256'), 'hex');
 $$;
 
@@ -348,7 +348,6 @@ begin
     'api_usage','audit_logs'
   ] loop
     execute format('alter table public.%I enable row level security', t);
-    execute format('alter table public.%I force row level security', t);
   end loop;
 end $$;
 

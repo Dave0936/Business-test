@@ -29,9 +29,13 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  const { data } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getUser();
+  // Optimistic check only (per the Next.js auth guide): pages verify the user again
+  // server-side. A transient network error must not be treated as "signed out".
+  const transient = error?.name === "AuthRetryableFetchError";
+  if (transient) console.error("proxy: auth check skipped after network error:", error.message);
 
-  if (!data.user && !PUBLIC.some((re) => re.test(path))) {
+  if (!data.user && !transient && !PUBLIC.some((re) => re.test(path))) {
     const login = new URL("/login", request.url);
     login.searchParams.set("next", path);
     return NextResponse.redirect(login);

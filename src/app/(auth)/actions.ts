@@ -39,7 +39,12 @@ export async function authenticate(_prev: FormState, form: FormData): Promise<Fo
     redirect("/onboarding");
   }
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: "Email or password is incorrect." };
+  if (error) {
+    if (error.code === "invalid_credentials") return { error: "Email or password is incorrect." };
+    if (error.code === "email_not_confirmed") return { error: "Confirm your email address first. Check your inbox for the link." };
+    console.error("sign-in failed", error.name, error.code, error.status, error.message);
+    return { error: "Sign-in is temporarily unavailable. Please try again shortly." };
+  }
   redirect(safeNext(next));
 }
 

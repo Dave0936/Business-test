@@ -95,7 +95,7 @@ export async function ingestDiscovered(
           website_url: ownSite,
           website_domain: id.domain,
           email,
-          email_source: email ? (rec.isDemo ? "manual" : "listing") : "unknown",
+          email_source: email ? "listing" : "unknown",
           phone: rec.phone,
           phone_e164: id.phoneE164,
           contact_page_url: rec.contactPageUrl,

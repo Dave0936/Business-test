@@ -14,7 +14,7 @@ export function OnboardingForm() {
         <Input id="name" name="name" required minLength={2} maxLength={120} placeholder="Northlight Web Studio" />
       </div>
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button className="w-full" disabled={pending}>{pending ? "Creating…" : "Create workspace"}</Button>
+      <Button type="submit" className="w-full" disabled={pending}>{pending ? "Creating…" : "Create workspace"}</Button>
     </form>
   );
 }

@@ -29,7 +29,7 @@ export function LoginForm({ next }: { next?: string }) {
       )}
       {state.error && <Alert variant="destructive"><AlertDescription className="text-destructive">{state.error}</AlertDescription></Alert>}
       {state.message && <Alert variant="success"><AlertDescription>{state.message}</AlertDescription></Alert>}
-      <Button className="w-full" disabled={pending}>{pending ? "Working…" : mode === "signup" ? "Create account" : mode === "magic" ? "Email me a link" : "Sign in"}</Button>
+      <Button type="submit" className="w-full" disabled={pending}>{pending ? "Working…" : mode === "signup" ? "Create account" : mode === "magic" ? "Email me a link" : "Sign in"}</Button>
       <div className="flex justify-between text-sm">
         <button type="button" className="text-primary hover:underline" onClick={() => setMode(mode === "signup" ? "signin" : "signup")}>
           {mode === "signup" ? "Have an account? Sign in" : "New here? Create an account"}

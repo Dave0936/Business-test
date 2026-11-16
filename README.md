@@ -50,6 +50,9 @@ npx supabase db push
 
 4. In *Authentication → URL Configuration*, set the Site URL to `http://localhost:3000` and add
    `http://localhost:3000/auth/callback` to the redirect URLs.
+5. Sign-up emails: Supabase's built-in email service only delivers to members of your Supabase
+   organisation and is heavily rate-limited. Sign up with your own (team member) address, or set up
+   custom SMTP in *Authentication → Emails* before inviting other people.
 
 **Option B: local Supabase (Docker)**
 
@@ -77,6 +80,10 @@ npm run dev
 
 Open http://localhost:3000, create an account, name your agency workspace, then either run a
 search or click **Load demo data** on the Overview page.
+
+If your server reaches the internet through an outbound proxy, set `HTTPS_PROXY` (and `NO_PROXY`);
+`src/instrumentation.ts` routes server-side requests through it. `GET /api/health` reports whether
+the server can reach Supabase.
 
 ---
 
@@ -107,6 +114,15 @@ npm run check
 ```
 
 Runs lint, type-checking, unit tests and a production build.
+
+```bash
+E2E_OWNER_EMAIL=owner@… E2E_STAFF_EMAIL=staff@… E2E_PASSWORD=… node tests/e2e/phase1.mjs
+```
+
+Phase 1 acceptance test against a running app (`npm run build && npm start`) and a real Supabase
+project: sign-in, onboarding, settings, demo data, every module, filters, mobile layout, sign-out
+and staff restrictions. Both accounts must exist and be confirmed, and the staff account must be a
+staff member of the owner's workspace.
 
 ```bash
 npm run test:db
@@ -161,7 +177,7 @@ tests/unit/              Vitest tests
 
 | Phase | Scope | Status |
 |---|---|---|
-| 1 | Foundation, auth, database, navigation, dashboard | **In testing** |
+| 1 | Foundation, auth, database, navigation, dashboard | **Complete and tested** |
 | 2 | Business discovery and CRM | Backend drafted, untested |
 | 3 | Website auditing and opportunity scoring | Backend drafted, untested |
 | 4 | Pinterest and design research | Backend drafted, untested |
