@@ -108,7 +108,8 @@ export interface WorkflowConfig {
 
 /** Create a run and queue one discovery job per location × sector. Works for members (RLS) and the worker. */
 export async function startWorkflowRun(db: SupabaseClient, organisationId: string, workflowId: string | null, config: WorkflowConfig, actorId: string | null): Promise<string> {
-  const { data: run, error } = await db.from("automation_runs").insert({ organisation_id: organisationId, workflow_id: workflowId, status: "running", stats: { searches: 0 } }).select("id").single();
+  // Created paused so no worker claims or finishes it until all its jobs are queued.
+  const { data: run, error } = await db.from("automation_runs").insert({ organisation_id: organisationId, workflow_id: workflowId, status: "paused", stats: { searches: 0 } }).select("id").single();
   if (error) throw new Error(`Could not start run: ${error.message}`);
   const cascade = { ...config.agents, minScore: config.minScore, prototypeLimit: config.prototypeLimit };
   let searches = 0;
@@ -125,5 +126,7 @@ export async function startWorkflowRun(db: SupabaseClient, organisationId: strin
     }
   }
   await db.rpc("bump_run_stat", { p_run: run.id, p_key: "searches", p_by: searches });
+  const { error: startErr } = await db.from("automation_runs").update({ status: "running" }).eq("id", run.id);
+  if (startErr) throw new Error(`Could not start run: ${startErr.message}`);
   return run.id;
 }

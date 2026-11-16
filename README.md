@@ -96,6 +96,8 @@ the server can reach Supabase.
 | `APP_ENCRYPTION_KEY` | Encrypting per-organisation integration secrets | **Yes** (server only) |
 | `ANTHROPIC_API_KEY` | AI audits, design briefs, site copy, emails | No (labelled template mode without it) |
 | `GOOGLE_PLACES_API_KEY` | Google Places discovery | No |
+| `SERPAPI_API_KEY` | Google Maps discovery via SerpAPI (or connect per workspace in Integrations) | No |
+| `HIGGSFIELD_API_KEY_ID`, `HIGGSFIELD_API_KEY_SECRET` | AI photos and video for prototypes (Phase 5) | No |
 | `OSM_CONTACT_EMAIL` | OpenStreetMap usage policy (User-Agent contact) | No |
 | `PINTEREST_ACCESS_TOKEN` | Pinterest references (needs approved API access) | No |
 | `UNSPLASH_ACCESS_KEY` | Licensed photos in prototypes | No |
@@ -103,7 +105,9 @@ the server can reach Supabase.
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_WEBHOOK_SECRET` | Sending approved emails, delivery events (verified domain required) | No |
 
 Without an optional credential, that feature shows as **Not connected** or **Demo mode** on the
-Integrations page. Nothing is faked.
+Integrations page. Nothing is faked. Owners and administrators can also connect keys per workspace
+on the Integrations page: each key is checked with the provider first, then stored encrypted with
+`APP_ENCRYPTION_KEY` and never shown again.
 
 ---
 
@@ -119,6 +123,9 @@ Runs lint, type-checking, unit tests and a production build.
 E2E_OWNER_EMAIL=owner@… E2E_STAFF_EMAIL=staff@… E2E_PASSWORD=… node tests/e2e/phase1.mjs
 ```
 
+`tests/e2e/phase2.mjs` takes the same variables and tests discovery, de-duplication, CSV
+import/export, the CRM board, follow-ups and integrations.
+
 Phase 1 acceptance test against a running app (`npm run build && npm start`) and a real Supabase
 project: sign-in, onboarding, settings, demo data, every module, filters, mobile layout, sign-out
 and staff restrictions. Both accounts must exist and be confirmed, and the staff account must be a
@@ -132,6 +139,16 @@ Applies all migrations to a scratch Postgres database (with a small stand-in for
 `auth` schema) and runs the SQL security tests: tenant isolation, role permissions, and that
 deployments and emails cannot bypass approval. Set `TEST_DATABASE_URL` to a Postgres superuser
 connection (default `postgres://postgres@127.0.0.1:54322/postgres`, the local Supabase database port).
+
+### How background work runs
+
+Work a person starts (searches, audits, research, generation, drafting) is queued in Postgres and
+processed straight after the request, **with that person's own session**, so row-level security
+applies to everything it touches. Privileged jobs (deployment, sending) and scheduled runs are only
+processed by the system worker with the service role key (Phases 7–9).
+
+Town search uses GeoNames data bundled in `data/geonames` (Places: GeoNames, CC BY 4.0), rebuilt
+with `scripts/build-geonames.py`.
 
 ---
 
@@ -178,7 +195,7 @@ tests/unit/              Vitest tests
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Foundation, auth, database, navigation, dashboard | **Complete and tested** |
-| 2 | Business discovery and CRM | Backend drafted, untested |
+| 2 | Business discovery and CRM (incl. SerpAPI, GeoNames towns, chain filter) | **Complete and tested** |
 | 3 | Website auditing and opportunity scoring | Backend drafted, untested |
 | 4 | Pinterest and design research | Backend drafted, untested |
 | 5 | AI website generation and live preview | Generator drafted; editor not built |

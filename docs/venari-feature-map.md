@@ -14,7 +14,7 @@ Legend: ✅ built · 🟡 partly built · ⬜ planned · ⛔ deliberately not ad
 | # | Venari feature | WebOpportunity AI | Phase |
 |---|---|---|---|
 | 1–2 | Local server, studio page, PWA icons/manifest | ✅ hosted web app; ⬜ PWA manifest + home-screen icons | 10 |
-| 3–4 | One AI gateway, model chooser, connections with key checks | ✅ `runAgent` (Claude); ⬜ model choice in Settings; 🟡 Integrations (status only) → ⬜ connect/verify/disconnect per organisation (encrypted) | 2 / 10 |
+| 3–4 | One AI gateway, model chooser, connections with key checks | ✅ `runAgent` (Claude); ⬜ model choice in Settings; ✅ connect/verify/disconnect per workspace (encrypted) | 2 / 10 |
 | 5–6 | Design searches with an idea, type, stages; AI-planned "scouts" per page section | 🟡 per-business design brief → ⬜ Design Studio search runs (idea, type, scouts) | 4 |
 | 7 | Pinterest scraping via Pinterest's internal web endpoint | ⛔ breaks Pinterest's terms. We use the official Pinterest API (needs approved access), staff-added references, and named websites | — |
 | 8 | Research: find the best sites of this kind, screenshot, rate | ⬜ Claude web search + screenshots via Cloudflare Browser Rendering + AI rating | 4 |
@@ -39,9 +39,9 @@ Legend: ✅ built · 🟡 partly built · ⬜ planned · ⛔ deliberately not ad
 | 30 | Email to the client with price; copy, never send | ✅ drafting + approval + Resend → ⬜ add price and a "copy only" mode | 8 |
 | 31 | Reuse a design for another client | ⬜ | 5 |
 | 32 | Story of a website | 🟡 CRM activity → ⬜ story view | 9 |
-| 33 | Countries and towns (GeoNames) | 🟡 16 countries + free-text city → ⬜ GeoNames town search | 2 |
-| 34 | Find clients via SerpAPI Google Maps, chains removed, website analyst, email found | ✅ provider framework, de-duplication, analyst; ⬜ SerpAPI provider, chain filter, ratings/reviews | 2 |
-| 35 | Client list with rating, reviews, problems | 🟡 → ⬜ rating, reviews, opening hours | 2 |
+| 33 | Countries and towns (GeoNames) | ✅ 245 countries, 70,000 towns, town autocomplete | 2 |
+| 34 | Find clients via SerpAPI Google Maps, chains removed, website analyst, email found | ✅ SerpAPI provider (1–3 pages, credits shown), chain and kind filters, de-duplication, analyst | 2 |
+| 35 | Client list with rating, reviews, problems | ✅ rating, reviews, opening hours, problems, CRM board, follow-ups, CSV export | 2 |
 | 36 | Design a website for a client using their real facts | 🟡 generate from lead → ⬜ start a Design Studio search from a lead | 4 |
 | 37 | Activity page | ⬜ | 9 |
 | 38 | More rounds with other sources, re-pick | ⬜ | 4 |

@@ -53,7 +53,6 @@ select pg_temp.assert((select count(*) from public.jobs) = 0, 'other org sees no
 
 -- Runs finish once idle (owner).
 set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
-update public.automation_runs set started_at = now() - interval '1 minute' where id = :'run';
 select pg_temp.assert(public.finish_idle_runs(:'org') = 1, 'idle run finished');
 select pg_temp.assert((select status::text from public.automation_runs where id = :'run') = 'succeeded', 'run succeeded');
 
