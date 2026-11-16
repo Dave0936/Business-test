@@ -182,6 +182,7 @@ ${body}
 <div class="wrap footer-legal">
 <p>Concept by ${agency}. Not commissioned or endorsed by ${esc(spec.business.name)}. Business details are taken from public listings.</p>
 ${credits.length ? `<p>Photos from Unsplash by ${credits.join(", ")}.</p>` : ""}
+${Object.values(spec.images).some((i) => i.aiGenerated) ? "<p>Some images are AI-generated illustrations, not photos of the business.</p>" : ""}
 </div>
 </footer>
 <div class="mobile-cta">${mobileCta}</div>

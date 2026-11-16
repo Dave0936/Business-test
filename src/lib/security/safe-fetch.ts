@@ -76,6 +76,8 @@ export interface SafeResponse {
   status: number;
   headers: Record<string, string>;
   body: string;
+  /** The raw bytes (for images and other binary downloads). */
+  bytesBody: Uint8Array;
   bytes: number;
   truncated: boolean;
   redirects: string[];
@@ -144,12 +146,14 @@ export async function safeFetch(rawUrl: string, opts: SafeFetchOptions = {}): Pr
           chunks.push(value);
         }
       }
-      const body = Buffer.concat(chunks).toString("utf8");
+      const raw = Buffer.concat(chunks);
+      const body = raw.toString("utf8");
       return {
         url: current.toString(),
         status: res.status,
         headers,
         body,
+        bytesBody: new Uint8Array(raw),
         bytes,
         truncated,
         redirects,

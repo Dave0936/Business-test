@@ -20,6 +20,7 @@ import { industryById, inferIndustryId } from "@/lib/industries";
 import { integrationStatus } from "@/lib/integrations";
 import { formatDate } from "@/lib/utils";
 import { ReferenceCard } from "./reference-card";
+import { ImagePanel, type PanelImage } from "./image-panel";
 import { BriefView } from "./brief-view";
 import { BriefEditor } from "./brief-editor";
 import {
@@ -64,6 +65,11 @@ export default async function StudioPage({ params }: { params: Promise<{ busines
   const industry = industryById(business.industry_id);
   const siteType = studio?.site_type ?? defaultSiteType(business.industry_id, industry?.sector ?? business.sector, business.category);
   const signed = await signedUploadUrls(db, refs);
+  const { data: genRows } = await db.from("generated_images").select("id, slot, status, storage_path, error").eq("business_id", businessId).eq("organisation_id", ctx.organisationId).order("created_at", { ascending: true }).limit(24);
+  const genPaths = (genRows ?? []).filter((g) => g.storage_path).map((g) => g.storage_path as string);
+  const { data: genSigned } = genPaths.length ? await db.storage.from("site-assets").createSignedUrls(genPaths, 3600) : { data: [] };
+  const genUrl = new Map((genSigned ?? []).filter((x) => x.path && x.signedUrl).map((x) => [x.path as string, x.signedUrl]));
+  const panelImages: PanelImage[] = (genRows ?? []).map((g) => ({ id: g.id, slot: g.slot, status: g.status, url: g.storage_path ? genUrl.get(g.storage_path) ?? null : null, error: g.error }));
   const imageFor = (r: ReferenceRow) => (r.storage_path ? signed[r.storage_path] ?? null : r.image_url);
   const byId = new Map(refs.map((r) => [r.id, r]));
   const picks = (studio?.picks ?? []).filter((p) => byId.has(p.reference_id));
@@ -207,6 +213,10 @@ export default async function StudioPage({ params }: { params: Promise<{ busines
           </div>
           {latest && (
             <div className="space-y-5">
+              <Card>
+                <CardHeader><CardTitle className="text-base">Photos</CardTitle><CardDescription>AI photos (Higgsfield) for the brief&apos;s image list. You see the price before anything runs.</CardDescription></CardHeader>
+                <CardContent><ImagePanel businessId={businessId} connected={status.higgsfield.mode === "live"} canEdit={editable} images={panelImages} /></CardContent>
+              </Card>
               <BriefView b={latest.brief as DesignBrief} refTitles={refTitles} />
               {editable && (
                 <details className="rounded-xl border bg-card p-4" data-testid="brief-editor">

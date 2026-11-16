@@ -13,6 +13,7 @@ begin
   if has_function_privilege('authenticated', 'public.design_studio_same_org()', 'execute') then raise exception 'design_studio_same_org exposed'; end if;
   if has_function_privilege('authenticated', 'public.site_build_same_org()', 'execute') then raise exception 'site_build_same_org exposed'; end if;
   if has_function_privilege('anon', 'public.sign_preview(uuid)', 'execute') then raise exception 'sign_preview exposed to anon'; end if;
+  if has_function_privilege('authenticated', 'public.generated_image_same_org()', 'execute') then raise exception 'generated_image_same_org exposed'; end if;
   if not has_function_privilege('authenticated', 'public.sign_preview(uuid)', 'execute') then raise exception 'sign_preview missing'; end if;
   if not has_function_privilege('anon', 'public.preview_files(uuid, text)', 'execute') then raise exception 'preview_files missing for anon'; end if;
   if has_function_privilege('anon', 'public.org_pending_jobs(uuid)', 'execute') then raise exception 'org_pending_jobs exposed to anon'; end if;

@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type JobType = "discover" | "audit" | "research" | "generate" | "deploy" | "draft_email" | "send_email" | "retention_sweep";
+export type JobType = "discover" | "audit" | "research" | "generate" | "deploy" | "draft_email" | "send_email" | "retention_sweep" | "image";
 
 export interface Cascade {
   audit: boolean;

@@ -5,6 +5,7 @@ import { ingestDiscovered } from "@/lib/crm/ingest";
 import { auditBusiness, type BusinessRow } from "@/lib/audit/run";
 import { produceBrief } from "@/lib/design/research";
 import { runBuildSlice, startBuild } from "@/lib/sites/bespoke/runner";
+import { processImage } from "@/lib/sites/generated-images";
 import { generateWebsite } from "@/lib/sites/builder";
 import { deployApprovedWebsite, DeploymentBlockedError } from "@/lib/deploy/deploy";
 import { draftEmail, DraftBlockedError } from "@/lib/email/draft";
@@ -124,6 +125,14 @@ export async function handleJob(db: SupabaseClient, job: JobRow): Promise<Record
       if (r.status === "failed") await bump(db, job.run_id, "builds_failed");
       // Stops here: deployment needs a person to approve.
       return { buildId, status: r.status, versionId: r.versionId ?? null };
+    }
+    case "image": {
+      // One step per run; come back shortly while Higgsfield is still working.
+      const r = await processImage(db, org, String(p.imageId));
+      if (r === "poll") {
+        await enqueue(db, { organisationId: org, runId: job.run_id, type: "image", payload: { imageId: p.imageId }, idempotencyKey: `image:${p.imageId}:${Date.now()}`, runAt: new Date(Date.now() + 8_000), maxAttempts: 5 });
+      }
+      return { imageId: p.imageId, status: r };
     }
     case "deploy": {
       try {

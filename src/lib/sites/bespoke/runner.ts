@@ -7,6 +7,7 @@ import { produceBrief } from "@/lib/design/research";
 import type { DesignBrief } from "@/lib/design/brief";
 import { enqueue } from "@/lib/jobs/queue";
 import { loadContext, resolveImages, saveVersion, slugify, themeFromBrief } from "../builder";
+import { generatedImagesFor } from "../generated-images";
 import type { ResolvedImage, SiteSpec } from "../spec";
 import { assembleBespoke, type AssembleContext } from "./assemble";
 import { makeChecker } from "./check";
@@ -64,7 +65,7 @@ async function buildContext(db: SupabaseClient, org: string, businessId: string,
   const briefRow = await latestBrief(db, org, businessId, actorId);
   const brief = briefRow.brief;
   const language = business.language ?? COUNTRIES.find((c) => c.code === business.country_code)?.language ?? "en";
-  const images = await resolveImages(db, org, brief.image_queries ?? []);
+  const images = { ...(await resolveImages(db, org, brief.image_queries ?? [])), ...(await generatedImagesFor(db, org, businessId)) };
   const { data: studio } = await db.from("design_studios").select("picks").eq("business_id", businessId).eq("organisation_id", org).maybeSingle();
   const { data: audit } = await db.from("website_audits").select("observed").eq("business_id", businessId).eq("organisation_id", org).order("created_at", { ascending: false }).limit(1).maybeSingle();
   const assemble: AssembleContext = {
@@ -72,6 +73,7 @@ async function buildContext(db: SupabaseClient, org: string, businessId: string,
     agencyName: o.agency_name || o.name,
     agencyWebsite: o.agency_website,
     photoCredits: [...new Set(Object.values(images).map((i) => i.credit?.name).filter(Boolean) as string[])],
+    aiImages: Object.values(images).some((i) => i.aiGenerated),
   };
   const spec: SiteSpec = {
     version: 1, kind: "bespoke", theme: themeFromBrief(brief),
@@ -83,7 +85,13 @@ async function buildContext(db: SupabaseClient, org: string, businessId: string,
 }
 
 function imageList(images: Record<string, ResolvedImage>) {
-  return Object.values(images).filter((i) => /^https:\/\//.test(i.src)).map((i) => ({ url: i.src, alt: i.alt, credit: i.credit?.name ?? null }));
+  return Object.values(images)
+    .filter((i) => /^https:\/\//.test(i.src) || /^assets\/[a-z0-9/._-]+$/i.test(i.src))
+    .map((i) => ({ url: i.src, alt: i.alt, credit: i.aiGenerated ? "AI-generated illustration" : i.credit?.name ?? null }));
+}
+
+function localAssets(images: Record<string, ResolvedImage>): string[] {
+  return Object.values(images).filter((i) => i.kind === "upload" && i.storagePath).map((i) => i.src);
 }
 
 /**
@@ -147,7 +155,7 @@ export async function runBuildSlice(db: SupabaseClient, buildId: string, opts: {
   if (!["queued", "running"].includes(build.status)) return { status: build.status as "succeeded" | "failed" | "stopped" };
   const org = build.organisation_id;
   const ctx = await buildContext(db, org, build.business_id, build.created_by);
-  const check = makeChecker(ctx.assemble, ctx.spec);
+  const check = makeChecker(ctx.assemble, ctx.spec, localAssets(ctx.images));
 
   const state: DraftState = { source: { ...build.source }, lastCheck: build.last_check?.outcome ?? null, dirtySinceCheck: build.last_check?.dirty ?? true, finished: null };
   const messages = [...build.messages];

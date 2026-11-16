@@ -149,6 +149,7 @@ try {
   const edMsg = await submit(edForm, "Save as new version");
   check("edited brief saved as a new version with contrast fixed", /new version.*Adjusted for contrast/i.test(edMsg), edMsg.slice(0, 160));
   await page.goto(studioUrl);
+  check("photo panel shows, and says Higgsfield is not connected", (await page.locator('[data-testid="image-panel"]').count()) === 1 && /Connect Higgsfield under Integrations/.test((await page.locator('[data-testid="image-panel"]').textContent()) ?? ""));
   check("version history kept", (await page.locator("text=Earlier versions").count()) > 0 && /Edited by your team/.test((await page.locator("main").textContent()) ?? ""));
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/p4-studio.png`, fullPage: true });
 

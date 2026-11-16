@@ -30,6 +30,8 @@ export interface AssembleContext {
   agencyName: string;
   agencyWebsite: string | null;
   photoCredits?: string[];
+  /** Some images were generated with AI: the footer says so. */
+  aiImages?: boolean;
 }
 
 export const PLACEHOLDERS = {
@@ -107,7 +109,7 @@ export function assembleBespoke(source: Record<string, string>, ctx: AssembleCon
     if ($('meta[name="robots"]').length === 0) $("head").append('<meta name="robots" content="noindex, nofollow">');
     $(".concept-bar, .concept-legal").remove(); // only ours, with the exact wording
     $("body").prepend(`<div class="concept-bar" role="note">Independent website concept created by ${esc(ctx.agencyName)}. It has not been commissioned or endorsed by ${esc(f.name)}.</div>`);
-    const credits = ctx.photoCredits?.length ? ` Photos from Unsplash by ${esc(ctx.photoCredits.join(", "))}.` : "";
+    const credits = (ctx.photoCredits?.length ? ` Photos from Unsplash by ${esc(ctx.photoCredits.join(", "))}.` : "") + (ctx.aiImages ? " Some images are AI-generated illustrations, not photos of the business." : "");
     $("body").append(`<div class="footer-legal concept-legal">Concept by ${esc(ctx.agencyName)}. Not commissioned or endorsed by ${esc(f.name)}. Business details are taken from public listings.${credits}</div>`);
 
     let html = $.html();

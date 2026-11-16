@@ -54,6 +54,8 @@ export interface ResolvedImage {
   kind: "photo" | "art" | "upload";
   /** For uploads: path inside the private site-assets bucket. */
   storagePath?: string;
+  /** Generated with AI (Higgsfield): the site says so. */
+  aiGenerated?: boolean;
 }
 
 /** The complete, renderable prototype. Stored immutably per version. */

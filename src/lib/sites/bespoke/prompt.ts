@@ -55,7 +55,7 @@ export function buildBrief(ctx: BuildContext): { trusted: string; untrustedSiteT
     }, null, 2),
     ctx.picks.length ? `Reference qualities chosen in the design studio, by section: ${ctx.picks.map((p) => `${p.section}: ${p.reason}`).join("; ")}` : "",
     ctx.images.length
-      ? `Images you may use (exact URLs only):\n${ctx.images.map((i) => `- ${i.url} | alt: ${i.alt}${i.credit ? ` | credit: ${i.credit}` : ""}`).join("\n")}`
+      ? `Images you may use (exact addresses only; assets/ paths are bundled with the site). Images credited as AI-generated illustrations must never be presented as photos of this business, its premises, staff or work:\n${ctx.images.map((i) => `- ${i.url} | alt: ${i.alt}${i.credit ? ` | credit: ${i.credit}` : ""}`).join("\n")}`
       : "No photographs are available: design with colour, type, CSS shapes and inline SVG.",
   ].filter(Boolean).join("\n\n");
   return { trusted, untrustedSiteText: ctx.existingSiteText ? ctx.existingSiteText.slice(0, 3500) : null };
