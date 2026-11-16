@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
     "/opportunities": ["./data/geonames/**"],
   },
   experimental: {
-    serverActions: { bodySizeLimit: "2mb" },
+    serverActions: { bodySizeLimit: "3mb" },
   },
   turbopack: {
     rules: {

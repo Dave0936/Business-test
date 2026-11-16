@@ -41,3 +41,25 @@ export async function removeReference(_p: ActionState, form: FormData): Promise<
     return "Removed.";
   }, "/design-research");
 }
+
+const SECTOR_KEYS = ["hospitality", "food", "beauty", "healthcare", "trades", "automotive", "property", "fitness", "professional", "services", "retail", "other"] as const;
+
+/** Assign one of the agency's own Pinterest boards to each sector (or none). */
+export async function saveBoardLinks(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("staff", async (ctx) => {
+    let saved = 0;
+    for (const sector of SECTOR_KEYS) {
+      const raw = str(form, `board_${sector}`);
+      if (!raw) {
+        await ctx.supabase.from("pinterest_board_links").delete().eq("organisation_id", ctx.organisationId).eq("sector", sector);
+        continue;
+      }
+      const [boardId, ...nameParts] = raw.split("|");
+      if (!/^[0-9]{1,30}$/.test(boardId)) throw new Error("Invalid board.");
+      const { error } = await ctx.supabase.from("pinterest_board_links").upsert({ organisation_id: ctx.organisationId, sector, board_id: boardId, board_name: nameParts.join("|").slice(0, 200) || boardId }, { onConflict: "organisation_id,sector" });
+      if (error) throw error;
+      saved++;
+    }
+    return `Saved: ${saved} sector${saved === 1 ? "" : "s"} linked to a board.`;
+  }, "/design-research");
+}

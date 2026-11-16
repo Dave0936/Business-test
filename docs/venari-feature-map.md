@@ -15,12 +15,12 @@ Legend: ✅ built · 🟡 partly built · ⬜ planned · ⛔ deliberately not ad
 |---|---|---|---|
 | 1–2 | Local server, studio page, PWA icons/manifest | ✅ hosted web app; ⬜ PWA manifest + home-screen icons | 10 |
 | 3–4 | One AI gateway, model chooser, connections with key checks | ✅ `runAgent` (Claude); ⬜ model choice in Settings; ✅ connect/verify/disconnect per workspace (encrypted) | 2 / 10 |
-| 5–6 | Design searches with an idea, type, stages; AI-planned "scouts" per page section | 🟡 per-business design brief → ⬜ Design Studio search runs (idea, type, scouts) | 4 |
+| 5–6 | Design searches with an idea, type, stages; AI-planned "scouts" per page section | ✅ per-business design studio with idea, site type and sections; picks cover one section each | 4 |
 | 7 | Pinterest scraping via Pinterest's internal web endpoint | ⛔ breaks Pinterest's terms. We use the official Pinterest API (needs approved access), staff-added references, and named websites | — |
-| 8 | Research: find the best sites of this kind, screenshot, rate | ⬜ Claude web search + screenshots via Cloudflare Browser Rendering + AI rating | 4 |
+| 8 | Research: find the best sites of this kind, screenshot, rate | 🟡 designers add sites and we read their fonts, colours and preview image → ⬜ automatic discovery (needs a decision on giving the research agent a web-search tool) and screenshots (Cloudflare Browser Rendering, Phase 7 credentials) | 4 / 7 |
 | 9 | Mobbin via Mobbin's own sign-in tokens | ⛔ no official Mobbin API; reusing session tokens breaks their terms. Revisit if Mobbin offers an API | — |
-| 10–11 | Judge picks 5 references covering the page; love/reject; own pictures; add a site; more rounds; re-pick | ⬜ | 4 |
-| 12–13 | Questions about the picks; editable creative brief; change type | 🟡 structured brief → ⬜ questions + editable brief | 4 |
+| 10–11 | Judge picks 5 references covering the page; love/reject; own pictures; add a site; more rounds; re-pick | ✅ Claude or rule-based picks, validated; love/reject; uploads; add a site; collect more pins; new round | 4 |
+| 12–13 | Questions about the picks; editable creative brief; change type | ✅ questions (Claude or standard), answers enforced, editable brief with versions and live contrast checks, change type | 4 |
 | 14 | Versions on disk, cover image | ✅ immutable versions in the database; ⬜ cover screenshots | 5 |
 | 15–16 | Art director "direction" + agentic builder that writes bespoke code and checks its own screenshots | 🟡 Claude writes content, our renderer lays it out → ⬜ art-director step + agentic builder (Claude Managed Agents) with a screenshot tool; template renderer kept as the fast, cheap option | 5 |
 | 17 | Self-hosted fonts (Fontsource) | 🟡 Google Fonts CDN → ⬜ self-hosted woff2 (also avoids the German GDPR Google Fonts issue) | 5 |

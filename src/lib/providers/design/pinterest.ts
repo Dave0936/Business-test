@@ -19,8 +19,8 @@ export interface PinRef {
 
 const API = "https://api.pinterest.com/v5";
 
-async function call<T>(token: string, path: string): Promise<T> {
-  const res = await fetch(`${API}${path}`, { headers: { authorization: `Bearer ${token}`, accept: "application/json" } });
+async function call<T>(token: string, path: string, fetchImpl: typeof fetch = fetch): Promise<T> {
+  const res = await fetchImpl(`${API}${path}`, { headers: { authorization: `Bearer ${token}`, accept: "application/json" } });
   if (res.status === 401 || res.status === 403) throw new Error("Pinterest token lacks access to this endpoint");
   if (!res.ok) throw new Error(`Pinterest API error ${res.status}`);
   return (await res.json()) as T;
@@ -51,6 +51,37 @@ export async function searchPins(token: string, term: string, countryCode = "GB"
   const q = new URLSearchParams({ term, country_code: countryCode, limit: String(Math.min(limit, 50)) });
   const json = await call<{ items: Pin[] }>(token, `/search/partner/pins?${q}`);
   return json.items.map(toRef);
+}
+
+export interface Board {
+  id: string;
+  name: string;
+  pinCount: number | null;
+  description: string | null;
+}
+
+/** The connected account's own boards (works with a standard token). */
+export async function listBoards(token: string, fetchImpl: typeof fetch = fetch): Promise<Board[]> {
+  const out: Board[] = [];
+  let bookmark: string | null = null;
+  for (let i = 0; i < 5; i++) {
+    const q = new URLSearchParams({ page_size: "100" });
+    if (bookmark) q.set("bookmark", bookmark);
+    const json = await call<{ items: { id: string; name: string; pin_count?: number; description?: string }[]; bookmark?: string | null }>(token, `/boards?${q}`, fetchImpl);
+    out.push(...json.items.map((b) => ({ id: b.id, name: b.name, pinCount: b.pin_count ?? null, description: b.description || null })));
+    bookmark = json.bookmark ?? null;
+    if (!bookmark) break;
+  }
+  return out;
+}
+
+/** One page of a board's pins; pass the returned bookmark to get the next page. */
+export async function boardPinsPage(token: string, boardId: string, opts: { limit?: number; bookmark?: string | null } = {}, fetchImpl: typeof fetch = fetch): Promise<{ pins: PinRef[]; bookmark: string | null }> {
+  if (!/^[0-9]+$/.test(boardId)) throw new Error("Invalid Pinterest board id");
+  const q = new URLSearchParams({ page_size: String(Math.min(opts.limit ?? 12, 100)) });
+  if (opts.bookmark) q.set("bookmark", opts.bookmark);
+  const json = await call<{ items: Pin[]; bookmark?: string | null }>(token, `/boards/${boardId}/pins?${q}`, fetchImpl);
+  return { pins: json.items.map(toRef), bookmark: json.bookmark ?? null };
 }
 
 export async function boardPins(token: string, boardNameContains: string, limit = 12): Promise<PinRef[]> {

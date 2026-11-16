@@ -19,6 +19,8 @@ export async function runDesignAgent(args: {
   industryLabel: string;
   auditSummary: string;
   references: { id: string; source: string; title: string | null; url: string; notes?: string | null }[];
+  /** From the design studio: our own staff's choices (trusted). */
+  studio?: { idea: string | null; siteTypeLabel: string; picks: { reference_id: string; section: string; reason: string }[]; answers: { question: string; answer: string }[]; loved: string[]; rejected: string[] } | null;
 }) {
   const refs = args.references.length
     ? args.references.map((r) => `- [${r.id}] (${r.source}) ${r.title ?? ""} ${r.url}${r.notes ? ` — notes: ${r.notes}` : ""}`).join("\n")
@@ -30,6 +32,15 @@ export async function runDesignAgent(args: {
     args.auditSummary || "(no audit available)",
     "Design references:",
     untrusted("design references", refs),
+    ...(args.studio
+      ? [
+          "Design studio decisions by our designer (trusted; follow them):",
+          `Site type: ${args.studio.siteTypeLabel}.${args.studio.idea ? ` Idea: ${args.studio.idea}` : ""}`,
+          `Picks by section: ${args.studio.picks.map((p) => `${p.section} → ${p.reference_id} (${p.reason})`).join("; ") || "none"}`,
+          `Loved: ${args.studio.loved.join(", ") || "none"}. Rejected (avoid their qualities): ${args.studio.rejected.join(", ") || "none"}.`,
+          `Answers: ${args.studio.answers.map((a) => `${a.question} → ${a.answer}`).join("; ") || "none"}`,
+        ]
+      : []),
     "Produce the design brief.",
   ].join("\n");
 

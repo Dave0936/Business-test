@@ -132,6 +132,11 @@ with no website, one with no contact route (high score, not qualified, explained
 site, the score breakdown, and queued audits finishing while the app is open. Behind an HTTPS
 proxy, run Node with `NODE_USE_ENV_PROXY=1`.
 
+`tests/e2e/phase4.mjs` (owner account) walks through the design studio with a fictional business:
+idea and site type, adding sites and pictures (including a disguised file that must be refused),
+love and reject, picks, a new round, questions, the brief, editing with live contrast checks,
+versions, and the phone layout.
+
 Phase 1 acceptance test against a running app (`npm run build && npm start`) and a real Supabase
 project: sign-in, onboarding, settings, demo data, every module, filters, mobile layout, sign-out
 and staff restrictions. Both accounts must exist and be confirmed, and the staff account must be a
@@ -217,6 +222,32 @@ A lead **qualifies** when its score reaches the threshold *and* the business has
 to contact it (an email on its own site or a mailto link, a contact page, or a phone number). A
 high score without a contact route shows as "Not qualified · No contact route found".
 
+## Design studio
+
+Each business has a design studio (Design Research → a business):
+
+1. **Idea and site type** (brochure, one-page, booking-led, menu-led, portfolio, shop). The type
+   sets the page sections that picks should cover.
+2. **References**: pins from the Pinterest board you assign to the sector (12 at a time, linked,
+   never copied), websites you add (we read their fonts, colours and preview image through the
+   same SSRF-safe fetcher as audits), and pictures you upload (PNG/JPEG/WebP up to 2 MB, checked
+   by content, stored in the private `site-assets` bucket and shown through signed links that
+   expire after an hour). Love or reject each one; rejected references are never picked.
+3. **Picks**: up to five references, one per section. Claude picks when connected; otherwise
+   simple rules do (loved first, then your own pictures and sites, newest first), and the page
+   says which. Claude's picks are checked: unknown, rejected or duplicate picks are replaced.
+4. **Questions**: Claude writes questions about the picks, or five standard ones are used. Answers
+   are the designer's decisions and override the brief's defaults.
+5. **Brief**: Claude writes it from the picks and answers, or it is built from the sector preset
+   plus your answers. Edit any field; every save is a new version, and colours that fail WCAG AA
+   are adjusted (the editor warns as you type).
+
+Automation and the builder use the same studio in the background, so a brief produced without a
+designer still respects any picks and answers already made.
+
+Pinterest: a standard token reads your own boards; assign one board per sector on the Design
+Research page. Public pin search needs Pinterest's approval and is used only if the token has it.
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -224,7 +255,7 @@ high score without a contact route shows as "Not qualified · No contact route f
 | 1 | Foundation, auth, database, navigation, dashboard | **Complete and tested** |
 | 2 | Business discovery and CRM (incl. SerpAPI, GeoNames towns, chain filter) | **Complete and tested** |
 | 3 | Website auditing and opportunity scoring | **Complete and tested** |
-| 4 | Pinterest and design research | Backend drafted, untested |
+| 4 | Design studio: Pinterest boards, references, picks, questions, editable brief | **Complete and tested** |
 | 5 | AI website generation and live preview | Generator drafted; editor not built |
 | 6 | Quality assurance and approval centre | QA drafted; approval UI not built |
 | 7 | Cloudflare deployment | Service drafted, untested |

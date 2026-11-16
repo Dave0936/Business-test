@@ -5,7 +5,7 @@ import { analyseHtml, emptyObservations, robotsDisallowsRoot, type Observations 
 import { scoreOpportunity, type Criterion, type ScoreResult } from "./score";
 import { aiAvailable } from "@/lib/ai/client";
 import { runAuditAgent, type AuditJudgement } from "@/lib/ai/agents/audit-agent";
-import { industryById } from "@/lib/industries";
+import { industryFor } from "@/lib/industries";
 import { mobileRenderCheck } from "./mobile-render";
 import { demoSiteHtml } from "@/lib/demo/sites";
 
@@ -136,7 +136,7 @@ export interface AuditOutcome {
 
 export async function auditBusiness(db: SupabaseClient, business: BusinessRow, opts: { threshold: number; actorId?: string | null }): Promise<AuditOutcome> {
   const org = business.organisation_id;
-  const industry = industryById(business.industry_id ?? INDUSTRY_FROM_CATEGORY(business));
+  const industry = industryFor(business);
   const hasWebsite = Boolean(business.website_url);
 
   // Demo records use reserved .example domains and are never fetched; the analyser runs
@@ -275,15 +275,4 @@ function sameSite(email: string, website: string | null): boolean {
   } catch {
     return false;
   }
-}
-
-function INDUSTRY_FROM_CATEGORY(b: BusinessRow): string | undefined {
-  const c = `${b.category ?? ""}`.toLowerCase();
-  const map: [RegExp, string][] = [
-    [/restaurant/, "restaurant"], [/cafe|coffee/, "cafe"], [/hotel|guest|lodging/, "hotel"], [/beauty|nail|spa/, "beauty_salon"],
-    [/barber|hair/, "barbershop"], [/dent/, "dentist"], [/construct|builder|contractor/, "construction"], [/plumb/, "plumber"],
-    [/electric/, "electrician"], [/mechanic|car repair/, "mechanic"], [/estate|real estate/, "estate_agent"], [/gym|fitness/, "gym"],
-    [/clean/, "cleaning"], [/account/, "accountant"], [/solicitor|lawyer|law/, "solicitor"], [/consult/, "consultant"],
-  ];
-  return map.find(([re]) => re.test(c))?.[1];
 }

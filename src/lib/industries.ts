@@ -41,6 +41,28 @@ export function industryById(id: string | null | undefined): Industry | undefine
   return INDUSTRIES.find((i) => i.id === id);
 }
 
+const CATEGORY_RULES: [RegExp, string][] = [
+  [/restaurant|bistro|brasserie|trattoria|steakhouse|diner|eatery/, "restaurant"], [/cafe|café|coffee|bakery|brunch|tea room/, "cafe"],
+  [/hotel|guest ?house|lodging|b&b|bed and breakfast|\binn\b/, "hotel"], [/beauty|nail|\bspa\b|lash|brow|aesthetic/, "beauty_salon"],
+  [/barber|hair/, "barbershop"], [/dent/, "dentist"], [/construct|builder|contractor|renovation/, "construction"], [/plumb|heating|boiler/, "plumber"],
+  [/electric/, "electrician"], [/mechanic|car repair|garage|tyre|\bmot\b/, "mechanic"], [/estate agent|real estate|letting/, "estate_agent"],
+  [/\bgym\b|fitness|personal train/, "gym"], [/clean/, "cleaning"], [/account|bookkeep/, "accountant"], [/solicitor|lawyer|\blaw\b|legal/, "solicitor"],
+  [/consult/, "consultant"],
+];
+
+/** Best-effort industry for a business whose source gave only a free-text category. */
+export function inferIndustryId(category: string | null | undefined): string | undefined {
+  const c = (category ?? "").toLowerCase();
+  if (!c) return undefined;
+  const id = CATEGORY_RULES.find(([re]) => re.test(c))?.[1];
+  return id && industryById(id) ? id : undefined;
+}
+
+/** The business's industry, inferred from its category when none was recorded. */
+export function industryFor(b: { industry_id: string | null; category?: string | null }): Industry | undefined {
+  return industryById(b.industry_id) ?? industryById(inferIndustryId(b.category));
+}
+
 export const OPPORTUNITY_TYPES = [
   { id: "no_website", label: "No website" },
   { id: "outdated_website", label: "Outdated website" },
