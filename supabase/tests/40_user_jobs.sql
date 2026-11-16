@@ -56,6 +56,25 @@ set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"
 select pg_temp.assert(public.finish_idle_runs(:'org') = 1, 'idle run finished');
 select pg_temp.assert((select status::text from public.automation_runs where id = :'run') = 'succeeded', 'run succeeded');
 
+-- Interrupted jobs are recovered: re-queued while attempts remain, failed when used up.
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
+select pg_temp.assert(public.enqueue_job(:'org', null, 'audit', '{}', 'stale:1'), 'queue stale candidate');
+select pg_temp.assert(public.enqueue_job(:'org', null, 'audit', '{}', 'stale:2', now(), 1), 'queue single-attempt job');
+select count(*) from public.claim_org_jobs(:'org', 'dead-worker', 5);
+reset role;
+update public.jobs set locked_at = now() - interval '11 minutes' where locked_by = 'dead-worker';
+select pg_temp.assert((select running from public.org_pending_jobs(:'org')) = 2, 'two jobs shown as running');
+set role authenticated;
+select count(*) as reclaimed from public.claim_org_jobs(:'org', 'w2', 5) \gset
+select pg_temp.assert(:reclaimed = 1, 'stale job with attempts left reclaimed');
+select pg_temp.assert((select status::text from public.jobs where idempotency_key like '%:stale:2') = 'failed', 'exhausted stale job failed');
+select pg_temp.assert((select last_error from public.jobs where idempotency_key like '%:stale:2') like 'The worker stopped%', 'clear error recorded');
+select pg_temp.expect_error(format($q$select public.recover_stale_jobs(%L, true)$q$, :'org'), 'permission denied');
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f2","role":"authenticated"}';
+select pg_temp.expect_error(format($q$select * from public.org_pending_jobs(%L)$q$, :'org'), 'not allowed');
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
+update public.jobs set status = 'succeeded' where locked_by = 'w2';
+
 -- The service worker can queue privileged jobs.
 set role service_role;
 set request.jwt.claims = '{"role":"service_role"}';

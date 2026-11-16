@@ -23,7 +23,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
 
   return (
     <>
-      <PageHeader title="Search run" description={<span className="flex items-center gap-2">Started {formatDate(run.started_at, true)} <StatusBadge status={run.status} /> {queued ? `· ${queued} jobs in progress (refresh to update)` : ""}</span>} />
+      <PageHeader title="Search run" description={<span className="flex items-center gap-2">Started {formatDate(run.started_at, true)} <StatusBadge status={run.status} /> {queued ? `· ${queued} jobs in progress (updates while this page is open)` : ""}</span>} />
       {run.error && <p className="mb-4 text-sm text-destructive">{run.error}</p>}
       <div className="grid gap-5 lg:grid-cols-[1fr_2fr]">
         <Card>

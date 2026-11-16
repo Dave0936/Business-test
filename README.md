@@ -126,6 +126,12 @@ E2E_OWNER_EMAIL=owner@… E2E_STAFF_EMAIL=staff@… E2E_PASSWORD=… node tests/
 `tests/e2e/phase2.mjs` takes the same variables and tests discovery, de-duplication, CSV
 import/export, the CRM board, follow-ups and integrations.
 
+`tests/e2e/phase3.mjs` (owner account, plus `NEXT_PUBLIC_SUPABASE_URL` and
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`) tests audits and scoring with fictional businesses: a business
+with no website, one with no contact route (high score, not qualified, explained), an unreachable
+site, the score breakdown, and queued audits finishing while the app is open. Behind an HTTPS
+proxy, run Node with `NODE_USE_ENV_PROXY=1`.
+
 Phase 1 acceptance test against a running app (`npm run build && npm start`) and a real Supabase
 project: sign-in, onboarding, settings, demo data, every module, filters, mobile layout, sign-out
 and staff restrictions. Both accounts must exist and be confirmed, and the staff account must be a
@@ -144,7 +150,10 @@ connection (default `postgres://postgres@127.0.0.1:54322/postgres`, the local Su
 
 Work a person starts (searches, audits, research, generation, drafting) is queued in Postgres and
 processed straight after the request, **with that person's own session**, so row-level security
-applies to everything it touches. Privileged jobs (deployment, sending) and scheduled runs are only
+applies to everything it touches. Anything that does not fit in that window keeps going in short
+slices while anyone with staff access has the app open (the header shows "N tasks in progress").
+A job interrupted by a time limit is retried after 10 minutes, or marked failed with a clear error
+once its attempts are used up, so runs always finish. Privileged jobs (deployment, sending) and scheduled runs are only
 processed by the system worker with the service role key (Phases 7–9).
 
 Town search uses GeoNames data bundled in `data/geonames` (Places: GeoNames, CC BY 4.0), rebuilt
@@ -190,13 +199,31 @@ tests/unit/              Vitest tests
 
 ---
 
+## How audits and scores work
+
+Each audit fetches the home page (and, if it has no form, the contact page) through `safeFetch`,
+which refuses private and internal addresses at connection time. It honours robots.txt for link
+checks. Everything measured is stored in `website_audits.observed`; AI opinions (only when
+Claude is connected) go in `.judgements` and are labelled "AI judgement" wherever they appear.
+
+The opportunity score (0–100, higher = more room to improve) is a weighted sum of explained
+criteria in `src/lib/audit/score.ts` (weights version `2026-11-v2`): website presence 40, mobile 15,
+enquiry and booking 15, performance 8, security 8, outdated technology 6, AI design judgement 6,
+and 4 each for contact information, SEO, accessibility and broken links. Plain or minimal design
+is never scored as outdated; only concrete signals count (no responsive viewport, obsolete tags,
+Flash, old jQuery, years-old copyright, plain HTTP).
+
+A lead **qualifies** when its score reaches the threshold *and* the business has published a way
+to contact it (an email on its own site or a mailto link, a contact page, or a phone number). A
+high score without a contact route shows as "Not qualified · No contact route found".
+
 ## Roadmap
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Foundation, auth, database, navigation, dashboard | **Complete and tested** |
 | 2 | Business discovery and CRM (incl. SerpAPI, GeoNames towns, chain filter) | **Complete and tested** |
-| 3 | Website auditing and opportunity scoring | Backend drafted, untested |
+| 3 | Website auditing and opportunity scoring | **Complete and tested** |
 | 4 | Pinterest and design research | Backend drafted, untested |
 | 5 | AI website generation and live preview | Generator drafted; editor not built |
 | 6 | Quality assurance and approval centre | QA drafted; approval UI not built |

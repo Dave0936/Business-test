@@ -50,17 +50,19 @@ export default async function AuditPage({ params }: { params: Promise<{ id: stri
                 <Fact label="H1 headings" value={o.h1Count} bad={o.h1Count === 0} />
                 <Fact label="Images without alt" value={`${o.imagesMissingAlt} of ${o.imageCount}`} bad={o.imagesMissingAlt > 0} />
                 <Fact label="Page language" value={o.lang ?? "Not declared"} bad={!o.lang} />
-                <Fact label="Forms" value={o.formCount} bad={o.formCount === 0} />
+                <Fact label="Forms (home / contact page)" value={`${o.formCount} / ${o.contactPageHasForm == null ? "not checked" : o.contactPageHasForm ? "yes" : "none"}`} bad={o.formCount === 0 && o.contactPageHasForm !== true} />
                 <Fact label="Booking links / systems" value={[...o.bookingPlatforms, o.bookingLinks.length ? `${o.bookingLinks.length} links` : ""].filter(Boolean).join(", ") || "None"} />
                 <Fact label="Calls to action" value={o.ctaCount ? o.ctaTexts.slice(0, 3).join(", ") : "None found"} bad={o.ctaCount === 0} />
                 <Fact label="Tap-to-call / email" value={`${o.telLinks.length ? "Yes" : "No"} / ${o.publishedEmails.length ? "Yes" : "No"}`} />
+                <Fact label="Phone shown on page" value={o.publishedPhones?.length ? o.publishedPhones[0] : "None found"} />
+                <Fact label="Insecure resources" value={o.mixedContentCount} bad={o.mixedContentCount > 0} />
                 <Fact label="Contact page" value={o.contactPageUrl ? "Yes" : "No"} />
                 <Fact label="Generator" value={o.generator ?? "—"} />
                 <Fact label="Obsolete tags" value={o.deprecatedTags.join(", ") || "None"} bad={o.deprecatedTags.length > 0} />
                 <Fact label="Flash / applets" value={yes(o.usesFlashOrApplets)} bad={o.usesFlashOrApplets} />
                 <Fact label="Latest © year" value={o.latestYearMentioned ?? "—"} />
                 <Fact label="Structured data" value={yes(o.structuredData)} />
-                <Fact label="Broken links" value={`${o.brokenLinks.length} of ${o.linksChecked} checked`} bad={o.brokenLinks.length > 0} />
+                <Fact label="Broken links" value={o.linksChecked ? `${o.brokenLinks.length} of ${o.linksChecked} checked` : "Not checked"} bad={o.brokenLinks.length > 0} />
                 <Fact label="robots.txt blocks crawling" value={yes(o.robotsDisallowed)} />
               </dl>
             )}

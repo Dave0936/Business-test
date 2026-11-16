@@ -5,23 +5,27 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { ThemeToggle } from "@/components/app/theme-toggle";
 import { LogOut } from "lucide-react";
-import { getOrgContext } from "@/lib/auth";
+import { getOrgContext, roleAtLeast } from "@/lib/auth";
 import { Sidebar } from "@/components/app/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { signOut, switchOrganisation } from "../(auth)/actions";
 import { integrationStatus } from "@/lib/integrations";
 import { humanise } from "@/lib/industries";
+import { WorkPulse } from "@/components/app/work-pulse";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getOrgContext();
   const theme = (await cookies()).get("wo_theme")?.value;
   const { supabase, organisationId } = ctx;
 
-  const [sites, emails, status] = await Promise.all([
+  const [sites, emails, status, pending] = await Promise.all([
     supabase.from("generated_websites").select("id", { count: "exact", head: true }).eq("organisation_id", organisationId).eq("status", "awaiting_approval"),
     supabase.from("email_drafts").select("id", { count: "exact", head: true }).eq("organisation_id", organisationId).in("status", ["awaiting_approval", "review"]),
     integrationStatus(supabase, organisationId),
+    supabase.rpc("org_pending_jobs", { p_org: organisationId }),
   ]);
+  const pendingRow = (pending.data as { queued: number; running: number }[] | null)?.[0];
+  const pendingCount = Number(pendingRow?.queued ?? 0) + Number(pendingRow?.running ?? 0);
   const demoParts = [
     status.anthropic.mode !== "live" && "AI",
     status.cloudflare.mode !== "live" && "deployment",
@@ -49,6 +53,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Badge variant="outline">{humanise(ctx.role)}</Badge>
           </div>
           <div className="flex items-center gap-3">
+            <WorkPulse initialPending={pendingCount} canProcess={roleAtLeast(ctx.role, "staff")} />
             {demoParts.length > 0 && (
               <Link href="/integrations" className="hidden sm:block">
                 <Badge variant="demo" title="Missing credentials. Nothing in these areas is faked; see Integrations.">Not connected: {demoParts.join(", ")}</Badge>

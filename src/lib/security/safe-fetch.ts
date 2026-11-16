@@ -162,3 +162,28 @@ export async function safeFetch(rawUrl: string, opts: SafeFetchOptions = {}): Pr
   }
   throw new UnsafeUrlError(`Too many redirects (>${maxRedirects})`);
 }
+
+/** Plain-English reason for a failed request (shown in audits as an observed fact). */
+export function describeFetchError(e: unknown): string {
+  if (e instanceof UnsafeUrlError) return `Blocked for safety: ${e.message}`;
+  const err = e as { name?: string; message?: string; code?: string; cause?: { code?: string; message?: string } };
+  const code = err.cause?.code ?? err.code ?? "";
+  if (err.name === "AbortError" || /aborted/i.test(err.message ?? "")) return "No response before the time limit (site too slow or down).";
+  const known: Record<string, string> = {
+    ENOTFOUND: "The domain name does not exist or has no DNS record.",
+    EAI_AGAIN: "The domain name could not be looked up (temporary DNS failure).",
+    ECONNREFUSED: "The server refused the connection.",
+    ECONNRESET: "The server closed the connection unexpectedly.",
+    ETIMEDOUT: "The server did not respond in time.",
+    UND_ERR_CONNECT_TIMEOUT: "The server did not accept a connection in time.",
+    UND_ERR_HEADERS_TIMEOUT: "The server accepted the connection but sent no response in time.",
+    CERT_HAS_EXPIRED: "The site's security certificate has expired.",
+    DEPTH_ZERO_SELF_SIGNED_CERT: "The site uses a self-signed security certificate.",
+    ERR_TLS_CERT_ALTNAME_INVALID: "The security certificate does not match the domain.",
+    UNABLE_TO_VERIFY_LEAF_SIGNATURE: "The security certificate could not be verified.",
+    EUNSAFE: "Blocked for safety: the domain points to a private network address.",
+  };
+  if (known[code]) return `${known[code]} (${code})`;
+  const detail = err.cause?.message ?? err.message ?? "Request failed";
+  return detail === "fetch failed" ? "The request failed before the site responded." : detail;
+}

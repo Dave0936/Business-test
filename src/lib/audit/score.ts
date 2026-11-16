@@ -11,7 +11,7 @@ import type { Observations } from "./observe";
  * are concrete (no responsive viewport, legacy markup, plugins, insecure transport,
  * old generator versions), not visual style.
  */
-export const WEIGHTS_VERSION = "2026-11-v1";
+export const WEIGHTS_VERSION = "2026-11-v2";
 
 export interface Criterion {
   id: string;
@@ -104,15 +104,23 @@ export function scoreOpportunity(obs: Observations | null, ctx: ScoreContext, ai
     const ebReasons: string[] = [];
     const hasBooking = o.bookingPlatforms.length > 0 || o.bookingLinks.length > 0;
     if (ctx.bookingRelevant && !hasBooking) { eb += 7; ebReasons.push("no booking link or booking system found"); }
-    if (o.formCount === 0) { eb += 4; ebReasons.push("no enquiry form on the home page"); }
+    if (o.formCount === 0) {
+      if (o.contactPageHasForm === true) { /* form on the contact page: fine */ }
+      else if (o.contactPageHasForm === false) { eb += 4; ebReasons.push("no enquiry form on the home page or the contact page"); }
+      else { eb += 3; ebReasons.push(o.contactPageUrl ? "no enquiry form on the home page (contact page could not be checked)" : "no enquiry form and no contact page"); }
+    }
     if (o.ctaCount === 0) { eb += 4; ebReasons.push("no clear call-to-action buttons or links"); }
     add({ id: "enquiry_booking", label: "Online enquiry or booking", weight: 15, basis: "observed", points: eb, reason: ebReasons.length ? `Observed: ${ebReasons.join("; ")}.` : "Enquiry routes and calls to action present." });
 
     // Contact info
     let ci = 0;
-    if (o.telLinks.length === 0) ci += 1.5;
-    if (o.publishedEmails.length === 0 && !o.contactPageUrl) ci += 2.5;
-    add({ id: "contact_info", label: "Contact information", weight: 4, basis: "observed", points: ci, reason: ci ? `Observed: ${[o.telLinks.length === 0 && "no tap-to-call link", o.publishedEmails.length === 0 && !o.contactPageUrl && "no email address or contact page link"].filter(Boolean).join("; ")}.` : "Phone and email/contact page are present." });
+    const ciReasons: string[] = [];
+    if (o.telLinks.length === 0) {
+      ci += o.publishedPhones.length ? 1 : 1.5;
+      ciReasons.push(o.publishedPhones.length ? "phone number shown but not tap-to-call" : "no phone number found");
+    }
+    if (o.publishedEmails.length === 0 && !o.contactPageUrl) { ci += 2.5; ciReasons.push("no email address or contact page link"); }
+    add({ id: "contact_info", label: "Contact information", weight: 4, basis: "observed", points: ci, reason: ci ? `Observed: ${ciReasons.join("; ")}.` : "Tap-to-call phone and email or contact page are present." });
 
     // Outdated technology (concrete signals only)
     let od = 0;
@@ -140,7 +148,7 @@ export function scoreOpportunity(obs: Observations | null, ctx: ScoreContext, ai
 
     // Technical issues
     const broken = o.brokenLinks.length;
-    add({ id: "technical", label: "Broken links and errors", weight: 4, basis: "observed", points: broken ? Math.min(4, 1 + broken) : 0, reason: broken ? `Observed: ${broken} broken link(s) out of ${o.linksChecked} checked.` : `No broken links among ${o.linksChecked} checked.` });
+    add({ id: "technical", label: "Broken links and errors", weight: 4, basis: "observed", points: broken ? Math.min(4, 1 + broken) : 0, reason: broken ? `Observed: ${broken} broken link(s) out of ${o.linksChecked} checked.` : o.linksChecked ? `No broken links among ${o.linksChecked} checked.` : o.robotsDisallowed ? "Links not checked: the site's robots.txt asks crawlers not to." : "No internal links to check." });
 
     // AI judgement (only if available) — clearly labelled
     if (ai.visualQuality != null || ai.navigationClarity != null) {
@@ -164,6 +172,7 @@ export function scoreOpportunity(obs: Observations | null, ctx: ScoreContext, ai
   // Audit score = how good the *current* site is (inverse of opportunity), null if no site.
   const auditScore = ctx.hasWebsite && reachable ? 100 - score : null;
 
+  // A lead only qualifies if we can reach the business through a route it published itself.
   const contactable = Boolean(ctx.publicEmail || ctx.contactPageUrl || ctx.phone);
   const byShare = (id: string) => {
     const c = criteria.find((x) => x.id === id);

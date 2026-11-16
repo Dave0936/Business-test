@@ -29,9 +29,13 @@ export interface Observations {
   formCount: number;
   inputCount: number;
   telLinks: string[];
+  /** Phone numbers printed in the visible text (not only tap-to-call links). */
+  publishedPhones: string[];
   mailtoLinks: string[];
   publishedEmails: string[];
   contactPageUrl: string | null;
+  /** null = contact page not checked; true/false = an enquiry form was or was not found there. */
+  contactPageHasForm: boolean | null;
   bookingLinks: string[];
   bookingPlatforms: string[];
   ctaCount: number;
@@ -61,7 +65,7 @@ export function emptyObservations(partial: Partial<Observations> = {}): Observat
     timeToFirstByteMs: null, totalTimeMs: null, pageBytes: null, error: null, robotsDisallowed: false,
     title: null, metaDescription: null, lang: null, viewportMeta: null, hasResponsiveViewport: false,
     mediaQueryCount: 0, h1Count: 0, imageCount: 0, imagesMissingAlt: 0, linkCount: 0, internalLinks: [],
-    formCount: 0, inputCount: 0, telLinks: [], mailtoLinks: [], publishedEmails: [], contactPageUrl: null,
+    formCount: 0, inputCount: 0, telLinks: [], publishedPhones: [], mailtoLinks: [], publishedEmails: [], contactPageUrl: null, contactPageHasForm: null,
     bookingLinks: [], bookingPlatforms: [], ctaCount: 0, ctaTexts: [], generator: null, deprecatedTags: [],
     tableLayoutSignals: 0, usesFlashOrApplets: false, jqueryVersion: null, mixedContentCount: 0,
     structuredData: false, openGraph: false, canonical: null, latestYearMentioned: null, scriptCount: 0,
@@ -82,6 +86,32 @@ const BOOKING_WORDS = /\b(book|booking|reserve|reservation|appointment|schedule 
 const CTA_WORDS = /\b(book|call|contact|get a quote|quote|enquire|inquire|order|reserve|schedule|start|request|buy|shop|get in touch|sign up|free consultation)\b/i;
 const DEPRECATED = ["font", "center", "marquee", "blink", "frameset", "frame", "big", "tt", "strike"];
 const EMAIL_IN_TEXT = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+// Phone-like runs: start with + or 0, then digits with spaces, dots, dashes or brackets.
+const PHONE_IN_TEXT = /(?:\+\d{1,3}[\s.-]?)?(?:\(0\)[\s.-]?)?\(?0?\d{2,5}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}/g;
+
+/** Phone numbers printed on the page. Conservative: 9 to 13 digits, starting with + or 0. */
+export function extractPhones(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.match(PHONE_IN_TEXT) ?? []) {
+    const raw = m.trim();
+    const digits = raw.replace(/\D/g, "");
+    if (!/^[+0(]/.test(raw)) continue;
+    if (digits.length < 9 || digits.length > 13) continue;
+    if (/^(19|20)\d{2}\D+(19|20)\d{2}$/.test(raw)) continue; // year ranges
+    out.add(raw.replace(/\s+/g, " "));
+  }
+  return [...out].slice(0, 5);
+}
+
+/** Resources the page itself loads over plain http (true mixed content; plain links don't count). */
+function countMixedContent($: cheerio.CheerioAPI): number {
+  let n = 0;
+  $("img[src], script[src], iframe[src], audio[src], video[src], source[src], embed[src], link[rel~='stylesheet'][href]").each((_, el) => {
+    const v = ($(el).attr("src") ?? $(el).attr("href") ?? "").trim();
+    if (/^http:\/\//i.test(v)) n++;
+  });
+  return n;
+}
 
 export function analyseHtml(html: string, pageUrl: string): Partial<Observations> {
   const $ = cheerio.load(html);
@@ -130,6 +160,14 @@ export function analyseHtml(html: string, pageUrl: string): Partial<Observations
   const deprecated = DEPRECATED.filter((t) => $(t).length > 0);
   const tableLayout = $("table").filter((_, t) => $(t).find("table").length > 0 || $(t).attr("width") !== undefined).length;
   const jq = html.match(/jquery[-.]?(\d+\.\d+(\.\d+)?)(\.min)?\.js/i);
+  const h1Count = $("h1").length;
+  const formCount = $("form").length;
+  const inputCount = $("input, textarea, select").length;
+  const generator = $('meta[name="generator"]').attr("content") ?? null;
+  const canonical = $('link[rel="canonical"]').attr("href") ?? null;
+  const scriptCount = $("script[src]").length;
+  const stylesheetCount = $('link[rel="stylesheet"]').length;
+  const mixedContentCount = base.protocol === "https:" ? countMixedContent($) : 0;
 
   // Visible text only (scripts/styles removed). Used for the AI excerpt and fact extraction.
   $("script, style, noscript, svg").remove();
@@ -144,14 +182,15 @@ export function analyseHtml(html: string, pageUrl: string): Partial<Observations
     viewportMeta: viewport,
     hasResponsiveViewport: Boolean(viewport && /width\s*=\s*device-width/i.test(viewport)),
     mediaQueryCount: (styleText.match(/@media/gi) ?? []).length,
-    h1Count: cheerio.load(html)("h1").length,
+    h1Count,
     imageCount: imgs.length,
     imagesMissingAlt: missingAlt,
     linkCount: links.length,
     internalLinks: [...internal].slice(0, 50),
-    formCount: cheerio.load(html)("form").length,
-    inputCount: cheerio.load(html)("input, textarea, select").length,
+    formCount,
+    inputCount,
     telLinks: [...new Set(tel)].slice(0, 5),
+    publishedPhones: extractPhones(text),
     mailtoLinks: [...new Set(mailto)].slice(0, 5),
     publishedEmails: [...new Set([...mailto, ...textEmails])].slice(0, 10),
     contactPageUrl: contactPage,
@@ -159,18 +198,18 @@ export function analyseHtml(html: string, pageUrl: string): Partial<Observations
     bookingPlatforms: [...platforms],
     ctaCount: ctaTexts.length,
     ctaTexts: [...new Set(ctaTexts)].slice(0, 10),
-    generator: cheerio.load(html)('meta[name="generator"]').attr("content") ?? null,
+    generator,
     deprecatedTags: deprecated,
     tableLayoutSignals: tableLayout,
     usesFlashOrApplets: /\.swf\b|<applet|application\/x-shockwave-flash/i.test(html),
     jqueryVersion: jq ? jq[1] : null,
-    mixedContentCount: base.protocol === "https:" ? (html.match(/(src|href)=["']http:\/\//gi) ?? []).length : 0,
+    mixedContentCount,
     structuredData: /application\/ld\+json/i.test(html),
     openGraph: /property=["']og:/i.test(html),
-    canonical: cheerio.load(html)('link[rel="canonical"]').attr("href") ?? null,
+    canonical,
     latestYearMentioned: years.length ? Math.max(...years) : null,
-    scriptCount: cheerio.load(html)("script[src]").length,
-    stylesheetCount: cheerio.load(html)('link[rel="stylesheet"]').length,
+    scriptCount,
+    stylesheetCount,
     wordCount: text ? text.split(" ").length : 0,
     textExcerpt: text.slice(0, 4000),
   };

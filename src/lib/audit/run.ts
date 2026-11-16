@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { safeFetch, UnsafeUrlError } from "@/lib/security/safe-fetch";
+import { describeFetchError, safeFetch } from "@/lib/security/safe-fetch";
 import { analyseHtml, emptyObservations, robotsDisallowsRoot, type Observations } from "./observe";
 import { scoreOpportunity, type Criterion, type ScoreResult } from "./score";
 import { aiAvailable } from "@/lib/ai/client";
@@ -38,8 +38,7 @@ export async function observeWebsite(url: string, opts: { checkLinks?: number } 
   try {
     res = await safeFetch(url);
   } catch (e) {
-    const msg = e instanceof UnsafeUrlError ? `Blocked for safety: ${e.message}` : (e as Error).message || "Request failed";
-    return emptyObservations({ error: msg, robotsDisallowed });
+    return emptyObservations({ error: describeFetchError(e), robotsDisallowed });
   }
 
   const final = new URL(res.url);
@@ -72,6 +71,17 @@ export async function observeWebsite(url: string, opts: { checkLinks?: number } 
     });
     obs.linksChecked = results.length;
     obs.brokenLinks = results.filter((r) => typeof r.status !== "number" || r.status >= 400);
+  }
+
+  // No form on the home page: look at the contact page once, since that is where most
+  // small-business enquiry forms live. Skipped if robots.txt asks us not to crawl.
+  if (obs.formCount === 0 && obs.contactPageUrl && !robotsDisallowed) {
+    try {
+      const c = await safeFetch(obs.contactPageUrl, { timeoutMs: 10_000, maxBytes: 1_500_000 });
+      obs.contactPageHasForm = c.status < 400 ? /<form[\s>]/i.test(c.body) : null;
+    } catch {
+      obs.contactPageHasForm = null;
+    }
   }
 
   const mobile = await mobileRenderCheck(res.url);
@@ -145,7 +155,8 @@ export async function auditBusiness(db: SupabaseClient, business: BusinessRow, o
     usedAi = true;
   }
 
-  const publicEmail = business.email ?? obs?.publishedEmails.find((e) => sameSite(e, business.website_url)) ?? null;
+  const publicEmail = business.email ?? (obs ? pickBusinessEmail(obs, business.website_url) : null);
+  const publishedPhone = obs?.telLinks[0] ?? obs?.publishedPhones[0] ?? null;
   const score = scoreOpportunity(
     obs,
     {
@@ -153,7 +164,7 @@ export async function auditBusiness(db: SupabaseClient, business: BusinessRow, o
       bookingRelevant: industry?.bookingRelevant ?? false,
       publicEmail,
       contactPageUrl: business.contact_page_url ?? obs?.contactPageUrl ?? null,
-      phone: business.phone,
+      phone: business.phone ?? publishedPhone,
       threshold: opts.threshold,
     },
     { visualQuality: judgement?.visual_quality ?? null, navigationClarity: judgement?.navigation_clarity ?? null },
@@ -207,6 +218,8 @@ export async function auditBusiness(db: SupabaseClient, business: BusinessRow, o
     patch.email_source = "business_website";
   }
   if (!business.contact_page_url && obs?.contactPageUrl) patch.contact_page_url = obs.contactPageUrl;
+  if (!business.phone && publishedPhone) patch.phone = publishedPhone;
+  patch.contactable = score.contactable;
   const est = industry?.typicalProjectValue;
   if (est && score.qualified) patch.estimated_value = est;
 
@@ -236,6 +249,21 @@ function demoObservations(b: BusinessRow): Observations {
     error: null,
     simulated: true,
   } as Observations;
+}
+
+const FREE_MAIL = /^(gmail|googlemail|outlook|hotmail|live|msn|yahoo|ymail|icloud|me|aol|btinternet|btopenworld|sky|talktalk|virginmedia|ntlworld|protonmail|proton|gmx|web|t-online|orange|free|laposte|libero|tiscali|wanadoo|bigpond|optusnet|xtra|shaw|rogers)\./i;
+
+/**
+ * The business's own published address: one on its own domain, or a free-mail address it
+ * publishes as a mailto link on its own site. Off-domain addresses that only appear in the
+ * text (often the web designer's) are not used.
+ */
+export function pickBusinessEmail(obs: Pick<Observations, "publishedEmails" | "mailtoLinks">, website: string | null): string | null {
+  return (
+    obs.publishedEmails.find((e) => sameSite(e, website)) ??
+    obs.mailtoLinks.find((e) => FREE_MAIL.test(e.split("@")[1] ?? "")) ??
+    null
+  );
 }
 
 function sameSite(email: string, website: string | null): boolean {

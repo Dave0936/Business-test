@@ -9,8 +9,14 @@ export function ScoreBreakdown({ score, breakdown, threshold, weightsVersion }: 
     <div className="space-y-3">
       <div className="flex items-baseline gap-3">
         <span className="text-3xl font-semibold tabular-nums">{score}</span>
-        <span className="text-sm text-muted-foreground">/ 100 opportunity · qualifies at {threshold}{breakdown.contactable === false ? " · no contact route found" : ""}</span>
+        <span className="text-sm text-muted-foreground">/ 100 opportunity · qualifies at {threshold}</span>
       </div>
+      {breakdown.contactable === false && (
+        <p className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+          <span className="font-medium">Not qualified: no contact route found.</span>{" "}
+          {score >= threshold ? "The score is high enough, but" : "Also,"} the business has not published an email address, contact page or phone number we could find, so it can&apos;t be contacted. Add a contact detail from a source the business published to qualify it.
+        </p>
+      )}
       <ul className="space-y-3">
         {breakdown.criteria.map((c) => (
           <li key={c.id} className="space-y-1">

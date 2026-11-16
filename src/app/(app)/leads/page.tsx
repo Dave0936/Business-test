@@ -22,7 +22,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const ctx = await getOrgContext();
   let q = ctx.supabase
     .from("businesses")
-    .select("id, name, category, industry_id, city, country_code, website_url, email, opportunity_type, lead_score, status, discovered_at, is_demo, rating, reviews_count", { count: "exact" })
+    .select("id, name, category, industry_id, city, country_code, website_url, email, opportunity_type, lead_score, status, contactable, discovered_at, is_demo, rating, reviews_count", { count: "exact" })
     .eq("organisation_id", ctx.organisationId);
   if (f.country) q = q.eq("country_code", f.country);
   if (f.sector) q = q.eq("industry_id", f.sector);
@@ -68,7 +68,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                   <TableCell className="max-w-48 truncate text-sm">{b.website_url ? <a href={b.website_url} target="_blank" rel="noopener noreferrer nofollow" className="text-primary hover:underline">{b.website_url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</a> : <span className="text-muted-foreground">None</span>}</TableCell>
                   <TableCell className="text-sm">{humanise(b.opportunity_type)}</TableCell>
                   <TableCell className="text-right"><ScoreBadge score={b.lead_score} /></TableCell>
-                  <TableCell><StatusBadge status={b.status} /></TableCell>
+                  <TableCell>
+                    <StatusBadge status={b.status} />
+                    {b.status === "not_qualified" && b.contactable === false && (
+                      <div className="mt-1 text-xs text-muted-foreground" title="The score shows how much the website could improve. A lead only qualifies when the business publishes an email, contact page or phone number.">No contact route found</div>
+                    )}
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{formatDate(b.discovered_at)}</TableCell>
                 </TableRow>
               ))}
