@@ -6,10 +6,10 @@ import { Monitor, Smartphone, ExternalLink } from "lucide-react";
  * Prototype preview. The iframe is sandboxed without allow-same-origin and the preview route
  * sends a strict CSP, so generated code cannot read the app's cookies or call its APIs.
  */
-export function PreviewFrame({ versionId, pages }: { versionId: string; pages: string[] }) {
+export function PreviewFrame({ base, versionKey, pages }: { base: string; versionKey: string; pages: string[] }) {
   const [page, setPage] = useState(pages.includes("index.html") ? "index.html" : pages[0] ?? "index.html");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
-  const src = `/api/preview/${versionId}/${page}`;
+  const src = `${base}/${page}`;
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -25,7 +25,7 @@ export function PreviewFrame({ versionId, pages }: { versionId: string; pages: s
       </div>
       <div className="flex justify-center overflow-hidden rounded-xl border bg-muted p-2">
         <iframe
-          key={`${versionId}-${page}`}
+          key={`${versionKey}-${page}`}
           title="Prototype preview"
           src={src}
           sandbox="allow-scripts allow-forms"

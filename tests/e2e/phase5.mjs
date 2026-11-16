@@ -40,6 +40,10 @@ try {
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  const previewFailures = [];
+  const googleRequests = [];
+  page.on("response", (r) => { if (r.url().includes("/api/preview/") && r.status() >= 300) previewFailures.push(`${r.status()} ${r.url().split("/api/preview/")[1]}`); });
+  page.on("request", (r) => { if (/fonts\.(googleapis|gstatic)\.com/.test(r.url())) googleRequests.push(r.url()); });
   await page.goto(`${BASE}/login`);
   await page.fill("#email", OWNER);
   await page.fill("#password", PASSWORD);
@@ -89,6 +93,12 @@ try {
   check("preview iframe is sandboxed without same-origin", (await frameEl.getAttribute("sandbox")) === "allow-scripts allow-forms");
   const frame = page.frameLocator('[data-testid="preview"]');
   await frame.locator("h1").first().waitFor({ timeout: 20000 });
+  await page.waitForTimeout(1500);
+  const styled = await frame.locator("body").evaluate((el) => ({ bg: getComputedStyle(el).backgroundColor, h1: getComputedStyle(document.querySelector("h1")).fontFamily, fonts: [...document.fonts].filter((f) => f.status === "loaded").length }));
+  check("preview applies the site's stylesheet", styled.bg !== "rgba(0, 0, 0, 0)" && !/Times/.test(styled.h1), JSON.stringify(styled));
+  check("self-hosted fonts load in the preview", styled.fonts > 0, `${styled.fonts} font faces loaded`);
+  check("no preview requests fail (styles, script, fonts)", previewFailures.length === 0, previewFailures.slice(0, 3).join(" | "));
+  check("previews never contact Google Fonts", googleRequests.length === 0, googleRequests.slice(0, 2).join(" | "));
   check("preview shows the concept notice", /not been commissioned or endorsed by/.test((await frame.locator(".concept-bar").first().textContent()) ?? ""));
   const pagesList = await page.locator("#preview-page option").allTextContents();
   check("several pages available to preview", pagesList.length >= 3 && pagesList[0] === "index.html", pagesList.join(", "));

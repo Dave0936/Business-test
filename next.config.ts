@@ -16,6 +16,8 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["playwright", "undici"],
   // GeoNames town data is read from disk by these routes.
   outputFileTracingIncludes: {
+    // Self-hosted fonts are read from disk whenever a prototype version is saved.
+    "/**": ["./data/fonts/**/*"],
     "/api/places/**": ["./data/geonames/**"],
     "/opportunities": ["./data/geonames/**"],
   },

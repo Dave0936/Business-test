@@ -39,6 +39,8 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
     integrationStatus(db, ctx.organisationId),
   ]);
   const spec = current?.spec as SiteSpec | undefined;
+  // Short-lived signed preview link (the sandboxed frame sends no cookies for its assets).
+  const { data: previewToken } = current ? await db.rpc("sign_preview", { p_version: current.id }) : { data: null };
   const pages = current ? Object.keys(current.files as SiteFiles).filter((f) => f.endsWith(".html")).sort((a, b) => (a === "index.html" ? -1 : b === "index.html" ? 1 : a.localeCompare(b))) : [];
   const active = builds?.find((b) => b.status === "queued" || b.status === "running");
   const lastDone = builds?.find((b) => b.status !== "queued" && b.status !== "running");
@@ -74,7 +76,7 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
 
       {current ? (
         <div className="grid gap-5 xl:grid-cols-[1fr_360px] [&>*]:min-w-0">
-          <PreviewFrame versionId={current.id} pages={pages} />
+          <PreviewFrame base={previewToken ? `/api/preview/${current.id}/~${previewToken}` : `/api/preview/${current.id}`} versionKey={current.id} pages={pages} />
           <div className="space-y-5">
             <Card>
               <CardHeader><CardTitle>Quality checks</CardTitle><CardDescription>{qa ? (qa.passed ? "All required checks passed." : "Some checks failed; it can't be approved until they pass.") : "Not checked yet."}</CardDescription></CardHeader>

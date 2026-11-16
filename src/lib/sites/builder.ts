@@ -9,6 +9,7 @@ import type { DesignBrief } from "@/lib/design/brief";
 import { runQaChecks, type QaReport } from "@/lib/qa/checks";
 import { browserQa } from "@/lib/qa/browser";
 import { demoContent } from "./demo-content";
+import { withSelfHostedFonts } from "./fonts-server";
 import { imageQueries, renderSite } from "./render";
 import { unsplashSearch } from "./images";
 import type { ResolvedImage, SiteFiles, SiteSpec, Theme } from "./spec";
@@ -101,7 +102,8 @@ export async function qaVersion(db: SupabaseClient, spec: SiteSpec, files: SiteF
  * awaiting_approval if it passes. A failing site stays at "generated" and cannot be approved.
  */
 export async function saveVersion(db: SupabaseClient, args: { organisationId: string; websiteId: string; businessId: string; spec: SiteSpec; note: string; actorId?: string | null; files?: SiteFiles }): Promise<{ versionId: string; report: QaReport; approvable: boolean }> {
-  const files = args.files ? await withUploads(db, args.spec, args.files) : await buildFiles(db, args.spec);
+  // Fonts are bundled with the site, so published concepts never load Google Fonts.
+  const files = withSelfHostedFonts(args.files ? await withUploads(db, args.spec, args.files) : await buildFiles(db, args.spec));
   const { data: last } = await db.from("website_versions").select("version").eq("website_id", args.websiteId).order("version", { ascending: false }).limit(1).maybeSingle();
   const { data: v, error } = await db
     .from("website_versions")
