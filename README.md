@@ -275,7 +275,7 @@ versions, restore, zip download and sign-in protection. The Claude build loop is
 | 2 | Business discovery and CRM (incl. SerpAPI, GeoNames towns, chain filter) | **Complete and tested** |
 | 3 | Website auditing and opportunity scoring | **Complete and tested** |
 | 4 | Design studio: Pinterest boards, references, picks, questions, editable brief | **Complete and tested** |
-| 5 | Bespoke website builder, live preview, revisions, versions | **Core complete and tested**; Higgsfield images, self-hosted fonts and languages next |
+| 5 | Bespoke website builder, preview, revisions, versions, self-hosted fonts, Higgsfield photos, extra languages | **Complete and tested** (real Claude and Higgsfield runs need their keys) |
 | 6 | Quality assurance and approval centre | QA drafted; approval UI not built |
 | 7 | Cloudflare deployment | Service drafted, untested |
 | 8 | Email generation, approval and sending | Service drafted, untested |
