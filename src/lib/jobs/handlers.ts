@@ -4,6 +4,7 @@ import { getProvider, type DiscoveryQuery } from "@/lib/providers/discovery";
 import { ingestDiscovered } from "@/lib/crm/ingest";
 import { auditBusiness, type BusinessRow } from "@/lib/audit/run";
 import { produceBrief } from "@/lib/design/research";
+import { runBuildSlice, startBuild } from "@/lib/sites/bespoke/runner";
 import { generateWebsite } from "@/lib/sites/builder";
 import { deployApprovedWebsite, DeploymentBlockedError } from "@/lib/deploy/deploy";
 import { draftEmail, DraftBlockedError } from "@/lib/email/draft";
@@ -102,10 +103,27 @@ export async function handleJob(db: SupabaseClient, job: JobRow): Promise<Record
     }
     case "generate": {
       await assertBudget(db, org, job.run_id);
-      const r = await generateWebsite(db, org, String(p.businessId), { actorId: (p.actorId as string) ?? null });
-      await bump(db, job.run_id, r.report.passed ? "prototypes_ready_for_approval" : "prototypes_failed_qa");
+      const actorId = (p.actorId as string) ?? null;
+      let buildId = p.buildId ? String(p.buildId) : null;
+      if (!buildId) {
+        if (!aiAvailable()) {
+          // Labelled template demo (Claude not connected); not approvable for real businesses.
+          const r = await generateWebsite(db, org, String(p.businessId), { actorId });
+          await bump(db, job.run_id, r.approvable ? "prototypes_ready_for_approval" : r.report.passed ? "demo_prototypes" : "prototypes_failed_qa");
+          return { websiteId: r.websiteId, versionId: r.versionId, qaPassed: r.report.passed, template: true };
+        }
+        buildId = (await startBuild(db, org, String(p.businessId), actorId, { runId: job.run_id, queue: false })).buildId;
+      }
+      const r = await runBuildSlice(db, buildId, { deadlineMs: 45_000, runId: job.run_id });
+      if (r.status === "continue") {
+        // More turns needed: queue the next slice (keeps each request inside serverless limits).
+        await enqueue(db, { organisationId: org, runId: job.run_id, type: "generate", payload: { buildId, actorId }, idempotencyKey: `build:${buildId}:${Date.now()}` });
+        return { buildId, status: "continuing" };
+      }
+      if (r.status === "succeeded") await bump(db, job.run_id, "prototypes_built");
+      if (r.status === "failed") await bump(db, job.run_id, "builds_failed");
       // Stops here: deployment needs a person to approve.
-      return { websiteId: r.websiteId, versionId: r.versionId, qaPassed: r.report.passed };
+      return { buildId, status: r.status, versionId: r.versionId ?? null };
     }
     case "deploy": {
       try {

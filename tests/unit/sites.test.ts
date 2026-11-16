@@ -34,7 +34,7 @@ describe("site renderer + QA", () => {
 
   it("fails QA when content invents a testimonial, award or unverified phone", () => {
     const spec = demoSpec();
-    const hero = spec.content.pages[0].sections[0];
+    const hero = spec.content!.pages[0].sections[0];
     if (hero.type !== "hero") throw new Error("expected hero");
     hero.subheading = "Award-winning food. Call 0131 555 0199. Read our customer reviews.";
     const report = runQaChecks(renderSite(spec), spec, ctx(spec));

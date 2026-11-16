@@ -25,6 +25,10 @@ import { BriefEditor } from "./brief-editor";
 import {
   addSiteAction, answersAction, briefAction, collectPinsAction, discoverSitesAction, pickAction, questionsAction, saveStudioSetup, uploadAction,
 } from "../studio-actions";
+import { buildSiteAction } from "../../builder/actions";
+
+// Server actions here can run a builder step or a web search: allow up to 5 minutes.
+export const maxDuration = 300;
 
 export const metadata: Metadata = { title: "Design studio" };
 
@@ -199,6 +203,7 @@ export default async function StudioPage({ params }: { params: Promise<{ busines
         <Step n={4} title="Creative brief" done={Boolean(latest)} description={latest ? <>Latest version {formatDate(latest.created_at, true)} · <Badge variant={latest.generated_by === "ai" ? "default" : "secondary"}>{latest.generated_by === "ai" ? "Written by Claude" : latest.generated_by === "manual" ? "Edited by your team" : "Sector preset + your choices"}</Badge></> : "Uses your picks and answers. Every version is kept, and the website builder uses the latest one."}>
           <div className="mb-4 flex flex-wrap gap-2">
             <ActionButton action={briefAction} hidden={hidden} label={latest ? "Write a new brief" : "Create brief"} disabled={!editable} />
+            {latest && <ActionButton action={buildSiteAction} hidden={hidden} label="Build prototype" variant="outline" disabled={!editable} />}
           </div>
           {latest && (
             <div className="space-y-5">

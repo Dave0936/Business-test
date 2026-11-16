@@ -26,6 +26,10 @@ original website concept, and helps an agency contact them. Read the README for 
    research may call `runWebSearch` (Anthropic's server-side, read-only web search). Its text is
    untrusted, and only addresses the search tool actually returned may be used, after
    `chooseResearchHits` filtering and a tool-less pick.
+   The site builder (`src/lib/sites/bespoke/`) has tools that act only on the build's
+   in-memory draft files (write, read, delete, list, check, finish): no network, database or
+   file-system access. Claude never writes contact details: placeholders are filled from the
+   verified record by `assembleBespoke`, which also adds the concept notice to every page.
 6. **Tenancy.** Every table has `organisation_id` with row-level security. Use the user client
    (`createUserClient`) for anything a person does. The service client bypasses RLS: use it only
    in jobs, webhooks and the deploy and send services, and always filter by `organisation_id`.

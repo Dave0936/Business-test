@@ -23,7 +23,7 @@ export default async function BuilderPage() {
 
   return (
     <>
-      <PageHeader title="AI Website Builder" description="Prototypes built from each business’s verified details and design brief. Edit text, images, fonts, colours and layout; every save is a new version that is re-checked." actions={<Button variant="outline" asChild><Link href="/leads?status=qualified">Generate from qualified leads</Link></Button>} />
+      <PageHeader title="AI Website Builder" description="Bespoke prototypes written by Claude from each business’s verified details and design brief. Every build and revision is a new version, checked before it can be approved." actions={<Button variant="outline" asChild><Link href="/design-research">Start from a design studio</Link></Button>} />
       {sites?.length ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {sites.map((s) => {
@@ -33,10 +33,10 @@ export default async function BuilderPage() {
             return (
               <Link key={s.id} href={`/builder/${s.id}`} className="group overflow-hidden rounded-xl border bg-card shadow-xs transition hover:border-primary/40">
                 <div className="h-28 border-b" style={v ? { background: `linear-gradient(135deg, ${v.spec.theme.colors.primary}, ${v.spec.theme.colors.accent})` } : undefined}>
-                  {v && <div className="flex h-full flex-col justify-end p-4 text-white"><p className="text-lg font-semibold leading-tight drop-shadow" style={{ fontFamily: v.spec.theme.fonts.heading }}>{b.name}</p><p className="text-xs opacity-90">{v.spec.theme.fonts.heading} · {v.spec.content.pages.length} pages</p></div>}
+                  {v && <div className="flex h-full flex-col justify-end p-4 text-white"><p className="text-lg font-semibold leading-tight drop-shadow" style={{ fontFamily: v.spec.theme.fonts.heading }}>{b.name}</p><p className="text-xs opacity-90">{v.spec.theme.fonts.heading} · {v.spec.content?.pages.length ?? v.spec.pages?.length ?? 0} pages</p></div>}
                 </div>
                 <div className="space-y-2 p-4">
-                  <div className="flex flex-wrap items-center gap-2"><StatusBadge status={s.status} /><DemoBadge show={b.is_demo} />{qa && <Badge variant={qa.passed ? "success" : "destructive"}>QA {qa.passed ? "passed" : "failed"}</Badge>}{v && <Badge variant="secondary">{v.generated_by === "ai" ? "AI" : v.generated_by === "demo" ? "Template" : "Edited"}</Badge>}</div>
+                  <div className="flex flex-wrap items-center gap-2"><StatusBadge status={s.status} /><DemoBadge show={b.is_demo} />{qa && <Badge variant={qa.passed ? "success" : "destructive"}>QA {qa.passed ? "passed" : "failed"}</Badge>}{v && <Badge variant="secondary">{v.generated_by === "ai" ? "AI" : v.generated_by === "demo" ? "Template demo" : "Edited"}</Badge>}</div>
                   <p className="text-xs text-muted-foreground">Version {v?.version ?? "—"} · updated {formatDate(s.updated_at, true)}</p>
                 </div>
               </Link>

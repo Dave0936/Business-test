@@ -11,6 +11,7 @@ begin
   if has_function_privilege('authenticated', 'public.recover_stale_jobs(uuid, boolean)', 'execute') then raise exception 'recover_stale_jobs exposed'; end if;
   if has_function_privilege('authenticated', 'public.design_reference_same_org()', 'execute') then raise exception 'design_reference_same_org exposed'; end if;
   if has_function_privilege('authenticated', 'public.design_studio_same_org()', 'execute') then raise exception 'design_studio_same_org exposed'; end if;
+  if has_function_privilege('authenticated', 'public.site_build_same_org()', 'execute') then raise exception 'site_build_same_org exposed'; end if;
   if has_function_privilege('anon', 'public.org_pending_jobs(uuid)', 'execute') then raise exception 'org_pending_jobs exposed to anon'; end if;
   if not has_function_privilege('authenticated', 'public.org_pending_jobs(uuid)', 'execute') then raise exception 'org_pending_jobs missing'; end if;
   if not has_function_privilege('authenticated', 'public.decide_approval(public.approval_subject, uuid, public.approval_decision, text)', 'execute') then raise exception 'decide_approval missing'; end if;

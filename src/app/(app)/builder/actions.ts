@@ -2,12 +2,14 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { guarded, kickWorker, str, type ActionState } from "@/lib/actions";
-import { SiteContentSchema, ThemeSchema, type SiteSpec } from "@/lib/sites/spec";
+import { SiteContentSchema, ThemeSchema, type SiteFiles, type SiteSpec } from "@/lib/sites/spec";
 import { imageQueries } from "@/lib/sites/render";
 import { regenerateSection, resolveImages, saveVersion, SITE_ASSETS_BUCKET } from "@/lib/sites/builder";
 import { enqueue } from "@/lib/jobs/queue";
 import { writeAudit } from "@/lib/audit-log";
 import type { OrgContext } from "@/lib/auth";
+import { aiAvailable } from "@/lib/ai/client";
+import { startBuild } from "@/lib/sites/bespoke/runner";
 
 async function currentSpec(ctx: OrgContext, websiteId: string) {
   const { data, error } = await ctx.supabase
@@ -101,10 +103,61 @@ export async function restoreVersion(_p: ActionState, form: FormData): Promise<A
   return guarded("staff", async (ctx) => {
     const websiteId = z.string().uuid().parse(str(form, "websiteId"));
     const versionId = z.string().uuid().parse(str(form, "versionId"));
-    const { data: v } = await ctx.supabase.from("website_versions").select("spec, version, website_id").eq("id", versionId).eq("website_id", websiteId).single();
+    const { data: v } = await ctx.supabase.from("website_versions").select("spec, files, version, website_id").eq("id", versionId).eq("website_id", websiteId).single();
     const { site } = await currentSpec(ctx, websiteId);
     if (!v) throw new Error("Version not found");
-    const r = await saveVersion(ctx.supabase, { organisationId: ctx.organisationId, websiteId, businessId: site.business_id, spec: v.spec as SiteSpec, note: `Restored version ${v.version}`, actorId: ctx.user.id });
+    const spec = v.spec as SiteSpec;
+    // Builder-written versions are restored file for file; template versions are re-rendered.
+    const r = await saveVersion(ctx.supabase, { organisationId: ctx.organisationId, websiteId, businessId: site.business_id, spec, files: spec.kind === "bespoke" ? (v.files as SiteFiles) : undefined, note: `Restored version ${v.version}`, actorId: ctx.user.id });
     return r.report.passed ? "Restored as a new version." : "Restored, but quality checks failed.";
+  }, "/builder");
+}
+
+// ---------------------------------------------------------------------------
+// Bespoke builder (Claude writes the site). Without Claude, a labelled template demo is made.
+// ---------------------------------------------------------------------------
+
+export async function buildSiteAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("staff", async (ctx) => {
+    const businessId = z.string().uuid().parse(str(form, "businessId"));
+    const { data: b } = await ctx.supabase.from("businesses").select("id, name").eq("id", businessId).eq("organisation_id", ctx.organisationId).single();
+    if (!b) throw new Error("Business not found.");
+    if (!aiAvailable()) {
+      await enqueue(ctx.supabase, { organisationId: ctx.organisationId, type: "generate", payload: { businessId, actorId: ctx.user.id }, idempotencyKey: `generate:${businessId}:demo:${Date.now()}` });
+      kickWorker(ctx);
+      await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.demo_build", entityType: "business", entityId: businessId });
+      return "Claude isn't connected, so a template demo is being made for testing. It can't be sent for approval for a real business.";
+    }
+    const r = await startBuild(ctx.supabase, ctx.organisationId, businessId, ctx.user.id);
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.build_started", entityType: "website", entityId: r.websiteId, data: { build_id: r.buildId } });
+    kickWorker(ctx);
+    return "Build started. Claude is writing the site; progress shows on the site's page.";
+  }, ["/builder", "/design-research"]);
+}
+
+export async function reviseSiteAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("staff", async (ctx) => {
+    const websiteId = z.string().uuid().parse(str(form, "websiteId"));
+    const instruction = str(form, "instruction").slice(0, 2000);
+    if (instruction.length < 5) throw new Error("Describe the change you want.");
+    const { data: site } = await ctx.supabase.from("generated_websites").select("business_id").eq("id", websiteId).eq("organisation_id", ctx.organisationId).single();
+    if (!site) throw new Error("Website not found.");
+    const r = await startBuild(ctx.supabase, ctx.organisationId, site.business_id, ctx.user.id, { instruction });
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.revision_started", entityType: "website", entityId: websiteId, data: { build_id: r.buildId } });
+    kickWorker(ctx);
+    return "Revision started. A new version will appear when it's done.";
+  }, "/builder");
+}
+
+export async function stopBuildAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("staff", async (ctx) => {
+    const buildId = z.string().uuid().parse(str(form, "buildId"));
+    const { data, error } = await ctx.supabase.from("site_builds").update({ stop_requested: true }).eq("id", buildId).eq("organisation_id", ctx.organisationId).in("status", ["queued", "running"]).select("id");
+    if (error) throw error;
+    if (!data?.length) return "That build has already finished.";
+    // A queued build that no worker has picked up yet stops straight away.
+    await ctx.supabase.from("site_builds").update({ status: "stopped", finished_at: new Date().toISOString() }).eq("id", buildId).eq("organisation_id", ctx.organisationId).eq("status", "queued");
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.build_stopped", entityType: "site_build", entityId: buildId });
+    return "Stopping. The current step finishes first; the draft is kept.";
   }, "/builder");
 }

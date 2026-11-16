@@ -1,8 +1,155 @@
 import type { Metadata } from "next";
-import { PhaseNotice } from "@/components/app/phase-notice";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getOrgContext, canWrite } from "@/lib/auth";
+import { PageHeader } from "@/components/app/page-header";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { ActionButton } from "@/components/app/action-button";
+import { ActionForm } from "@/components/app/action-form";
+import { Textarea } from "@/components/ui/textarea";
+import { DemoBadge, StatusBadge } from "@/components/app/badges";
+import { integrationStatus } from "@/lib/integrations";
+import type { QaCheck } from "@/lib/qa/checks";
+import type { SiteFiles, SiteSpec } from "@/lib/sites/spec";
+import { formatDate } from "@/lib/utils";
+import { PreviewFrame } from "./preview-frame";
+import { buildSiteAction, restoreVersion, reviseSiteAction, stopBuildAction } from "../actions";
 
-export const metadata: Metadata = { title: "Website editor" };
+// Server actions here can run a builder step or a web search: allow up to 5 minutes.
+export const maxDuration = 300;
 
-export default function Page() {
-  return <PhaseNotice title="Website editor" phase={5} summary="Live preview and editing of text, images, fonts, colours and layout, with section and full-site regeneration." available={[{ href: "/builder", label: "All prototypes" }]} />;
+export const metadata: Metadata = { title: "Website" };
+
+const QA_TONE: Record<string, "success" | "destructive" | "warning" | "secondary"> = { pass: "success", fail: "destructive", warn: "warning", skipped: "secondary" };
+
+export default async function WebsitePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const ctx = await getOrgContext();
+  const db = ctx.supabase;
+  const { data: site } = await db.from("generated_websites").select("id, slug, status, business_id, current_version_id, businesses(id, name, is_demo)").eq("id", id).eq("organisation_id", ctx.organisationId).maybeSingle();
+  if (!site) notFound();
+  const biz = site.businesses as unknown as { id: string; name: string; is_demo: boolean };
+  const [{ data: versions }, { data: builds }, { data: current }, { data: qa }, status] = await Promise.all([
+    db.from("website_versions").select("id, version, generated_by, change_note, created_at, spec->kind").eq("website_id", id).order("version", { ascending: false }).limit(30),
+    db.from("site_builds").select("id, kind, status, instruction, turns, cost_usd, activity, error, summary, suggestions, created_at, finished_at").eq("website_id", id).order("created_at", { ascending: false }).limit(5),
+    site.current_version_id ? db.from("website_versions").select("id, version, spec, files, generated_by").eq("id", site.current_version_id).single() : Promise.resolve({ data: null }),
+    site.current_version_id ? db.from("quality_reports").select("passed, checks, created_at").eq("version_id", site.current_version_id).order("created_at", { ascending: false }).limit(1).maybeSingle() : Promise.resolve({ data: null }),
+    integrationStatus(db, ctx.organisationId),
+  ]);
+  const spec = current?.spec as SiteSpec | undefined;
+  const pages = current ? Object.keys(current.files as SiteFiles).filter((f) => f.endsWith(".html")).sort((a, b) => (a === "index.html" ? -1 : b === "index.html" ? 1 : a.localeCompare(b))) : [];
+  const active = builds?.find((b) => b.status === "queued" || b.status === "running");
+  const lastDone = builds?.find((b) => b.status !== "queued" && b.status !== "running");
+  const editable = canWrite(ctx.role);
+  const aiLive = status.anthropic.mode === "live";
+  const isTemplate = spec?.kind !== "bespoke";
+  const checks = (qa?.checks ?? []) as QaCheck[];
+
+  return (
+    <>
+      <PageHeader
+        title={biz.name}
+        description={<span className="flex flex-wrap items-center gap-2"><StatusBadge status={site.status} /><DemoBadge show={biz.is_demo} />{current && <Badge variant="secondary">Version {current.version} · {current.generated_by === "ai" ? "built by Claude" : current.generated_by === "demo" ? "template demo" : "edited"}</Badge>}<Link href={`/leads/${biz.id}`} className="text-primary hover:underline">lead</Link><Link href={`/design-research/${biz.id}`} className="text-primary hover:underline">design studio</Link></span>}
+        actions={editable && !active && <ActionButton action={buildSiteAction} hidden={{ businessId: biz.id }} label={current ? "Build again from the brief" : "Build site"} variant={current ? "outline" : "default"} confirm={current ? "Build a fresh site from the brief? The current version is kept in the history." : undefined} />}
+      />
+
+      {current && isTemplate && current.generated_by === "demo" && (
+        <Alert variant="info" className="mb-5"><AlertDescription>{biz.is_demo ? "Template demo of a fictional business, for trying the workflow." : "This is a template demo made because Claude isn't connected. It's for testing only and can't be sent for approval. Connect Claude under Integrations, then build the real site."}</AlertDescription></Alert>
+      )}
+
+      {active && (
+        <Card className="mb-5" data-testid="active-build">
+          <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+            <div><CardTitle>{active.kind === "revision" ? "Revising" : "Building"}…</CardTitle><CardDescription>{active.instruction ? `“${active.instruction}” · ` : ""}{active.turns} steps · ${Number(active.cost_usd).toFixed(2)} so far · updates while this page is open</CardDescription></div>
+            {editable && <ActionButton action={stopBuildAction} hidden={{ buildId: active.id }} label="Stop" variant="outline" confirm="Stop this build? The draft so far is kept with the build." />}
+          </CardHeader>
+          <CardContent><Activity items={active.activity as { at: string; text: string }[]} /></CardContent>
+        </Card>
+      )}
+      {!active && lastDone && (lastDone.status === "failed" || lastDone.status === "stopped") && (
+        <Alert variant={lastDone.status === "failed" ? "destructive" : "info"} className="mb-5"><AlertDescription>Last build {lastDone.status === "failed" ? "failed" : "was stopped"} {formatDate(lastDone.finished_at ?? lastDone.created_at, true)}.{lastDone.error ? ` ${lastDone.error}` : ""}</AlertDescription></Alert>
+      )}
+
+      {current ? (
+        <div className="grid gap-5 xl:grid-cols-[1fr_360px] [&>*]:min-w-0">
+          <PreviewFrame versionId={current.id} pages={pages} />
+          <div className="space-y-5">
+            <Card>
+              <CardHeader><CardTitle>Quality checks</CardTitle><CardDescription>{qa ? (qa.passed ? "All required checks passed." : "Some checks failed; it can't be approved until they pass.") : "Not checked yet."}</CardDescription></CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm" data-testid="qa-list">
+                  {checks.map((c) => (
+                    <li key={c.id}>
+                      <div className="flex items-center justify-between gap-2"><span>{c.label}</span><Badge variant={QA_TONE[c.status]}>{c.status}</Badge></div>
+                      {c.status !== "pass" && c.details.length > 0 && <ul className="mt-1 list-disc pl-5 text-xs text-muted-foreground">{c.details.slice(0, 4).map((d) => <li key={d}>{d}</li>)}{c.details.length > 4 && <li>…and {c.details.length - 4} more</li>}</ul>}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+
+            {spec?.kind === "bespoke" && (
+              <Card>
+                <CardHeader><CardTitle>Revise</CardTitle><CardDescription>Tell the builder what to change. It edits this version and saves a new one.</CardDescription></CardHeader>
+                <CardContent className="space-y-3">
+                  {spec.summary && <p className="text-sm text-muted-foreground">{spec.summary}</p>}
+                  {spec.suggestions?.length ? (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium">Builder&apos;s suggestions</p>
+                      {spec.suggestions.map((sug) => (
+                        <div key={sug} className="flex items-start justify-between gap-2 text-sm"><span>{sug}</span>{editable && aiLive && !active && <ActionButton action={reviseSiteAction} hidden={{ websiteId: id, instruction: sug }} label="Apply" variant="ghost" />}</div>
+                      ))}
+                    </div>
+                  ) : null}
+                  {editable && (
+                    <ActionForm action={reviseSiteAction} submitLabel="Revise" disabled={!aiLive || Boolean(active)}>
+                      <input type="hidden" name="websiteId" value={id} />
+                      <Textarea name="instruction" rows={3} maxLength={2000} placeholder="For example: make the hero calmer with more white space, and move the booking form higher." aria-label="Change to make" required />
+                    </ActionForm>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardHeader><CardTitle>Versions</CardTitle></CardHeader>
+              <CardContent>
+                <ul className="divide-y text-sm" data-testid="versions">
+                  {versions?.map((v) => (
+                    <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                      <div><p className="font-medium">Version {v.version}{v.id === site.current_version_id ? " (current)" : ""}</p><p className="text-xs text-muted-foreground">{v.change_note} · {formatDate(v.created_at, true)}</p></div>
+                      <div className="flex items-center gap-2">
+                        <a href={`/api/export/site/${v.id}`} className="text-xs text-primary hover:underline">Download</a>
+                        {editable && v.id !== site.current_version_id && <ActionButton action={restoreVersion} hidden={{ websiteId: id, versionId: v.id }} label="Restore" variant="ghost" />}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+
+            {builds && builds.length > 0 && !active && lastDone && (
+              <Card>
+                <CardHeader><CardTitle>Last build</CardTitle><CardDescription>{lastDone.turns} steps · ${Number(lastDone.cost_usd).toFixed(2)}</CardDescription></CardHeader>
+                <CardContent><Activity items={lastDone.activity as { at: string; text: string }[]} /></CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      ) : !active ? (
+        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No version yet. {editable ? "Use Build site to start." : ""}</CardContent></Card>
+      ) : null}
+    </>
+  );
+}
+
+function Activity({ items }: { items: { at: string; text: string }[] }) {
+  const recent = items.slice(-14).reverse();
+  return (
+    <ol className="space-y-1 text-sm" aria-label="Build activity">
+      {recent.map((a, i) => <li key={`${a.at}-${i}`} className="flex gap-3"><span className="w-14 shrink-0 tabular-nums text-xs text-muted-foreground">{new Date(a.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span><span>{a.text}</span></li>)}
+    </ol>
+  );
 }

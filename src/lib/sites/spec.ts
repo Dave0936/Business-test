@@ -59,7 +59,16 @@ export interface ResolvedImage {
 /** The complete, renderable prototype. Stored immutably per version. */
 export interface SiteSpec {
   version: 1;
-  content: SiteContent;
+  /** "template": content rendered by our layout (demo mode only). "bespoke": files written by Claude. */
+  kind?: "template" | "bespoke";
+  /** Template sites only. */
+  content?: SiteContent;
+  /** Bespoke sites: the files as Claude wrote them (placeholders unfilled), for revisions. */
+  source?: Record<string, string>;
+  /** Bespoke sites: page file names, the builder's summary and suggestions. */
+  pages?: string[];
+  summary?: string;
+  suggestions?: string[];
   theme: Theme;
   /** Verified facts only, copied from the business record by code. */
   business: {

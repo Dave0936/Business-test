@@ -15,7 +15,7 @@ import type { ResolvedImage, SiteFiles, SiteSpec, Theme } from "./spec";
 
 export const SITE_ASSETS_BUCKET = "site-assets";
 
-function slugify(s: string): string {
+export function slugify(s: string): string {
   return s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\[demo\]\s*/, "demo-").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "site";
 }
 
@@ -35,7 +35,7 @@ interface BusinessForSite {
   is_demo: boolean;
 }
 
-async function loadContext(db: SupabaseClient, organisationId: string, businessId: string) {
+export async function loadContext(db: SupabaseClient, organisationId: string, businessId: string) {
   const [{ data: b, error }, { data: org, error: oErr }] = await Promise.all([
     db.from("businesses").select("id, name, category, city, region, country_code, phone, email, address, language, industry_id, website_url, is_demo").eq("id", businessId).eq("organisation_id", organisationId).single(),
     db.from("organisations").select("name, agency_name, agency_website, agency_reply_email").eq("id", organisationId).single(),
@@ -45,7 +45,7 @@ async function loadContext(db: SupabaseClient, organisationId: string, businessI
   return { business: b as BusinessForSite, org };
 }
 
-function themeFromBrief(brief: DesignBrief): Theme {
+export function themeFromBrief(brief: DesignBrief): Theme {
   return {
     colors: { primary: brief.palette.primary, secondary: brief.palette.secondary, accent: brief.palette.accent, background: brief.palette.background, surface: brief.palette.surface, text: brief.palette.text, muted: brief.palette.muted },
     fonts: { heading: brief.typography.heading, body: brief.typography.body },
@@ -100,8 +100,8 @@ export async function qaVersion(db: SupabaseClient, spec: SiteSpec, files: SiteF
  * Store a new immutable version, make it current, run QA and move the site to
  * awaiting_approval if it passes. A failing site stays at "generated" and cannot be approved.
  */
-export async function saveVersion(db: SupabaseClient, args: { organisationId: string; websiteId: string; businessId: string; spec: SiteSpec; note: string; actorId?: string | null }): Promise<{ versionId: string; report: QaReport }> {
-  const files = await buildFiles(db, args.spec);
+export async function saveVersion(db: SupabaseClient, args: { organisationId: string; websiteId: string; businessId: string; spec: SiteSpec; note: string; actorId?: string | null; files?: SiteFiles }): Promise<{ versionId: string; report: QaReport; approvable: boolean }> {
+  const files = args.files ? await withUploads(db, args.spec, args.files) : await buildFiles(db, args.spec);
   const { data: last } = await db.from("website_versions").select("version").eq("website_id", args.websiteId).order("version", { ascending: false }).limit(1).maybeSingle();
   const { data: v, error } = await db
     .from("website_versions")
@@ -118,18 +118,22 @@ export async function saveVersion(db: SupabaseClient, args: { organisationId: st
   const { error: qErr } = await db.from("quality_reports").insert({ organisation_id: args.organisationId, website_id: args.websiteId, version_id: v.id, passed: report.passed, checks: report.checks });
   if (qErr) throw qErr;
 
-  if (report.passed) {
+  // Template builds exist so the app can be tried without Claude. They can go to approval only
+  // for fictional demo businesses; a real prospect's prototype must be built by Claude.
+  const { data: biz } = await db.from("businesses").select("is_demo").eq("id", args.businessId).eq("organisation_id", args.organisationId).single();
+  const approvable = report.passed && (args.spec.generatedBy !== "demo" || Boolean(biz?.is_demo));
+  if (approvable) {
     const { error: sErr } = await db.from("generated_websites").update({ status: "awaiting_approval" }).eq("id", args.websiteId).eq("organisation_id", args.organisationId);
     if (sErr) throw sErr;
   }
-  await db.from("businesses").update({ status: report.passed ? "awaiting_deployment_approval" : "prototype_generated" }).eq("id", args.businessId).eq("organisation_id", args.organisationId)
+  await db.from("businesses").update({ status: approvable ? "awaiting_deployment_approval" : "prototype_generated" }).eq("id", args.businessId).eq("organisation_id", args.organisationId)
     .in("status", ["new", "researching", "qualified", "not_qualified", "prototype_generated", "awaiting_deployment_approval", "deployed"]);
   await db.from("crm_activities").insert({
     organisation_id: args.organisationId, business_id: args.businessId, type: "prototype_version",
-    summary: `${args.note} — quality checks ${report.passed ? "passed" : "failed"}`,
-    data: { website_id: args.websiteId, version_id: v.id, passed: report.passed }, actor_id: args.actorId ?? null,
+    summary: `${args.note} — quality checks ${report.passed ? "passed" : "failed"}${report.passed && !approvable ? " (demo build: not for approval)" : ""}`,
+    data: { website_id: args.websiteId, version_id: v.id, passed: report.passed, approvable }, actor_id: args.actorId ?? null,
   });
-  return { versionId: v.id, report };
+  return { versionId: v.id, report, approvable };
 }
 
 export async function generateWebsite(db: SupabaseClient, organisationId: string, businessId: string, opts: { actorId?: string | null; forceTemplate?: boolean } = {}) {
@@ -183,6 +187,7 @@ export async function generateWebsite(db: SupabaseClient, organisationId: string
     images: {},
     slug: site.slug,
     generatedBy,
+    kind: "template",
   };
   spec.images = await resolveImages(db, organisationId, imageQueries(spec));
 
@@ -194,6 +199,8 @@ export async function regenerateSection(db: SupabaseClient, args: { organisation
   const { data: site, error } = await db.from("generated_websites").select("id, business_id, current_version_id, website_versions!generated_websites_current_version_fk(spec)").eq("id", args.websiteId).eq("organisation_id", args.organisationId).single();
   if (error) throw error;
   const spec = structuredClone((site.website_versions as unknown as { spec: SiteSpec }).spec);
+  if (!spec.content) throw new Error("This site was written by the builder: use Revise with an instruction instead.");
+  const content = spec.content;
   if (!aiAvailable()) throw new Error("Section regeneration needs ANTHROPIC_API_KEY. Edit the text directly instead.");
   const { business } = await loadContext(db, args.organisationId, site.business_id);
   const { data: briefRow } = await db.from("design_briefs").select("brief").eq("business_id", site.business_id).order("created_at", { ascending: false }).limit(1).single();
@@ -201,9 +208,9 @@ export async function regenerateSection(db: SupabaseClient, args: { organisation
   const r = await runSectionAgent({
     db, organisationId: args.organisationId,
     input: { business: { name: business.name, category: business.category, city: business.city, country_code: business.country_code, industryLabel: industry?.label ?? "business", bookingRelevant: industry?.bookingRelevant ?? false }, language: spec.business.language, brief: briefRow!.brief as DesignBrief },
-    current: spec.content, pageSlug: args.pageSlug, sectionIndex: args.sectionIndex, instruction: args.instruction,
+    current: content, pageSlug: args.pageSlug, sectionIndex: args.sectionIndex, instruction: args.instruction,
   });
-  const page = spec.content.pages.find((p) => p.slug === args.pageSlug)!;
+  const page = content.pages.find((p) => p.slug === args.pageSlug)!;
   if (r.output.type !== page.sections[args.sectionIndex].type) throw new Error("AI changed the section type; try again.");
   page.sections[args.sectionIndex] = r.output;
   spec.images = await resolveImages(db, args.organisationId, imageQueries(spec), spec.images);

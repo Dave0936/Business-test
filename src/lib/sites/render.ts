@@ -13,14 +13,14 @@ export const esc = (s: string | null | undefined) =>
 const RADIUS = { none: "0px", small: "6px", medium: "12px", large: "22px" } as const;
 const SPACE = { compact: "64px", comfortable: "88px", airy: "120px" } as const;
 
-type Page = SiteSpec["content"]["pages"][number];
+type Page = NonNullable<SiteSpec["content"]>["pages"][number];
 
 function pageFile(slug: string) {
   return slug === "index" ? "index.html" : `${slug}.html`;
 }
 
 function hasPage(spec: SiteSpec, slug: string) {
-  return spec.content.pages.some((p) => p.slug === slug);
+  return spec.content!.pages.some((p) => p.slug === slug);
 }
 
 function ctaHref(spec: SiteSpec, target: string): string {
@@ -52,7 +52,7 @@ function section(spec: SiteSpec, s: Section, idx: number): string {
     case "hero": {
       const layout = spec.theme.heroLayout;
       const ctas = `<div class="actions"><a class="btn btn-primary" href="${esc(ctaHref(spec, s.primary_cta.target))}">${esc(s.primary_cta.label)}</a>${s.secondary_cta ? `<a class="btn btn-ghost" href="${esc(ctaHref(spec, s.secondary_cta.target))}">${esc(s.secondary_cta.label)}</a>` : ""}</div>`;
-      const text = `<div class="hero-text"><p class="eyebrow">${esc(spec.content.tagline)}</p><h1>${esc(s.heading)}</h1><p class="lead">${esc(s.subheading)}</p>${ctas}</div>`;
+      const text = `<div class="hero-text"><p class="eyebrow">${esc(spec.content!.tagline)}</p><h1>${esc(s.heading)}</h1><p class="lead">${esc(s.subheading)}</p>${ctas}</div>`;
       if (layout === "full-bleed") return `<section class="hero hero-bleed" id="${id}"><div class="hero-media">${image(spec, s.image_query, "", true)}</div><div class="wrap">${text}</div></section>`;
       if (layout === "centered") return `<section class="hero hero-centered" id="${id}"><div class="wrap">${text}</div></section>`;
       return `<section class="hero hero-split" id="${id}"><div class="wrap split">${text}<div class="hero-media">${image(spec, s.image_query, "", true)}</div></div></section>`;
@@ -128,7 +128,7 @@ function jsonLd(spec: SiteSpec): string {
 }
 
 function layout(spec: SiteSpec, page: Page): string {
-  const nav = spec.content.pages.map((p) => `<li><a href="${pageFile(p.slug)}"${p.slug === page.slug ? ' aria-current="page"' : ""}>${esc(p.nav_label)}</a></li>`).join("");
+  const nav = spec.content!.pages.map((p) => `<li><a href="${pageFile(p.slug)}"${p.slug === page.slug ? ' aria-current="page"' : ""}>${esc(p.nav_label)}</a></li>`).join("");
   const hero = page.sections.find((s) => s.type === "hero") as Extract<Section, { type: "hero" }> | undefined;
   const primary = hero?.primary_cta ?? { label: "Get in touch", target: "contact" as const };
   const mobileCta = spec.business.phone
@@ -175,7 +175,7 @@ ${body}
 </main>
 <footer class="site-footer">
 <div class="wrap footer-grid">
-<div><p class="brand">${esc(spec.business.name)}</p><p class="muted">${esc(spec.content.tagline)}</p></div>
+<div><p class="brand">${esc(spec.business.name)}</p><p class="muted">${esc(spec.content!.tagline)}</p></div>
 <div>${contactDetails(spec)}</div>
 <nav aria-label="Footer"><ul>${nav}</ul></nav>
 </div>
@@ -318,7 +318,7 @@ if(s)s.textContent='Thanks. This is a concept site, so nothing was sent.';f.rese
 
 export function renderSite(spec: SiteSpec): SiteFiles {
   const files: SiteFiles = {};
-  for (const page of spec.content.pages) files[pageFile(page.slug)] = layout(spec, page);
+  for (const page of spec.content!.pages) files[pageFile(page.slug)] = layout(spec, page);
   files["styles.css"] = css(spec);
   files["script.js"] = SCRIPT;
   files["robots.txt"] = "User-agent: *\nDisallow: /\n";
@@ -331,7 +331,7 @@ export function renderSite(spec: SiteSpec): SiteFiles {
 `;
   // Generated artwork for any image without a resolved photo.
   const queries = new Set<string>();
-  for (const p of spec.content.pages) for (const s of p.sections) {
+  for (const p of spec.content!.pages) for (const s of p.sections) {
     if (s.type === "hero") queries.add(s.image_query);
     if (s.type === "gallery") s.image_queries.forEach((q) => queries.add(q));
   }
@@ -344,6 +344,7 @@ export function renderSite(spec: SiteSpec): SiteFiles {
 
 export function imageQueries(spec: Pick<SiteSpec, "content">): string[] {
   const q = new Set<string>();
+  if (!spec.content) return [];
   for (const p of spec.content.pages) for (const s of p.sections) {
     if (s.type === "hero") q.add(s.image_query);
     if (s.type === "gallery") s.image_queries.forEach((x) => q.add(x));

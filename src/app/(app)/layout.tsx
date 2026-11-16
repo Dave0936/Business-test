@@ -1,5 +1,7 @@
 // Per-user, per-request: never prerender (auth state and env are read at request time).
 export const dynamic = "force-dynamic";
+// Builder turns and audits can take a few minutes; let server actions and after() finish.
+export const maxDuration = 300;
 
 import Link from "next/link";
 import { cookies } from "next/headers";

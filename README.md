@@ -248,6 +248,25 @@ designer still respects any picks and answers already made.
 Pinterest: a standard token reads your own boards; assign one board per sector on the Design
 Research page. Public pin search needs Pinterest's approval and is used only if the token has it.
 
+## Website builder
+
+Claude writes each prototype from scratch (HTML, CSS and a small script) in a loop of short
+turns: it writes files, runs the same quality checks used for approval, fixes what they find and
+finishes only when they pass. Each turn is saved, so a build carries on across serverless time
+limits while anyone has the app open; the site's page shows the activity and a Stop button.
+
+- Claude never writes a phone number, email or address: it uses placeholders that are filled from
+  the verified business record, and anything that needs a missing detail is removed.
+- Every page gets the concept notice ("not commissioned or endorsed by …").
+- Revisions: describe a change (or apply one of the builder's suggestions) and a new version is
+  made from the current one. Every version can be previewed, restored or downloaded as a zip.
+- Without an Anthropic key, a clearly labelled template demo is made so the workflow can be
+  tried. For a real business it can't be sent for approval; only fictional demo businesses can.
+
+`tests/e2e/phase5.mjs` (owner account) covers the template path, preview, quality checks,
+versions, restore, zip download and sign-in protection. The Claude build loop is covered by
+`tests/unit/bespoke.test.ts`, including a scripted multi-turn build.
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -256,7 +275,7 @@ Research page. Public pin search needs Pinterest's approval and is used only if 
 | 2 | Business discovery and CRM (incl. SerpAPI, GeoNames towns, chain filter) | **Complete and tested** |
 | 3 | Website auditing and opportunity scoring | **Complete and tested** |
 | 4 | Design studio: Pinterest boards, references, picks, questions, editable brief | **Complete and tested** |
-| 5 | AI website generation and live preview | Generator drafted; editor not built |
+| 5 | Bespoke website builder, live preview, revisions, versions | **Core complete and tested**; Higgsfield images, self-hosted fonts and languages next |
 | 6 | Quality assurance and approval centre | QA drafted; approval UI not built |
 | 7 | Cloudflare deployment | Service drafted, untested |
 | 8 | Email generation, approval and sending | Service drafted, untested |

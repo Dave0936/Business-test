@@ -243,3 +243,60 @@ export async function runWebSearch(opts: {
   }
   return { text, hits: [...hits.values()], searches, costUsd };
 }
+
+// ---------------------------------------------------------------------------
+// One turn of a tool-using agent whose tools act only on in-memory draft files
+// (the bespoke site builder). The caller runs the loop and executes the tools.
+// ---------------------------------------------------------------------------
+
+export interface ToolTurnResult {
+  message: Anthropic.Beta.BetaMessage;
+  costUsd: number;
+}
+
+export async function runToolTurn(opts: {
+  agent: string;
+  organisationId: string;
+  db: SupabaseClient;
+  system: string;
+  tools: Anthropic.Beta.BetaToolUnion[];
+  messages: Anthropic.Beta.BetaMessageParam[];
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  maxTokens?: number;
+}): Promise<ToolTurnResult> {
+  const anthropic = getClient();
+  const model = env.anthropicModel;
+  let message: Anthropic.Beta.BetaMessage;
+  try {
+    // Streaming: a turn can write a whole page, which can take minutes.
+    message = await anthropic.beta.messages
+      .stream({
+        model,
+        max_tokens: opts.maxTokens ?? 64000,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        cache_control: { type: "ephemeral" },
+        system: [{ type: "text", text: `${opts.system}\n\n${UNTRUSTED_RULE}`, cache_control: { type: "ephemeral" } }],
+        tools: opts.tools,
+        messages: opts.messages,
+        output_config: { effort: opts.effort ?? "high" },
+      })
+      .finalMessage();
+  } catch (err) {
+    if (err instanceof Anthropic.RateLimitError) throw new Error(`Claude rate limit reached for ${opts.agent}; it will retry.`);
+    if (err instanceof Anthropic.AuthenticationError) throw new Error("Anthropic API key was rejected. Check ANTHROPIC_API_KEY.");
+    if (err instanceof Anthropic.APIError) throw new Error(`Claude API error ${err.status ?? ""} in ${opts.agent}: ${err.message}`);
+    throw err;
+  }
+  const usage = message.usage;
+  const price = PRICES[message.model] ?? PRICES[model] ?? { in: 4, out: 20 };
+  const inputTokens = (usage.input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0);
+  const costUsd =
+    ((usage.input_tokens ?? 0) * price.in + (usage.cache_creation_input_tokens ?? 0) * price.in * 1.25 + (usage.cache_read_input_tokens ?? 0) * price.in * 0.1 + (usage.output_tokens ?? 0) * price.out) / 1_000_000;
+  await opts.db.from("api_usage").insert({
+    organisation_id: opts.organisationId, provider: "anthropic", operation: opts.agent,
+    input_units: inputTokens, output_units: usage.output_tokens ?? 0, cost_usd: costUsd,
+  });
+  if (message.stop_reason === "refusal") throw new AgentRefusalError(`${opts.agent} declined the request.`);
+  return { message, costUsd };
+}
