@@ -11,7 +11,7 @@ import { ActionButton } from "@/components/app/action-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { credentialFields } from "@/lib/integrations-verify";
-import { connectIntegration, disconnectIntegration } from "./actions";
+import { checkOsmAction, connectIntegration, disconnectIntegration } from "./actions";
 
 export const metadata: Metadata = { title: "Integrations" };
 
@@ -49,6 +49,7 @@ export default async function IntegrationsPage() {
                 <p className="text-muted-foreground">{s.mode === "live" ? `Using ${s.source} credentials.` : i.fallback}</p>
                 <p className="text-xs text-muted-foreground">Environment: {i.envVars.map((v) => <code key={v} className="mr-1 rounded bg-muted px-1">{v}</code>)}</p>
                 <a href={i.docs} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">Setup documentation ↗</a>
+                {i.key === "openstreetmap" && <div className="border-t pt-3"><ActionButton action={checkOsmAction} label="Check OpenStreetMap servers" variant="outline" /></div>}
                 {(() => {
                   const fields = credentialFields(i.key);
                   const conn = conns?.find((c) => c.provider === i.key && c.status === "connected");

@@ -1,6 +1,7 @@
 "use server";
 import { writeAudit } from "@/lib/audit-log";
 import { guarded, str, type ActionState } from "@/lib/actions";
+import { checkOverpassServers } from "@/lib/providers/discovery/openstreetmap";
 import { encryptSecret } from "@/lib/security/crypto";
 import { credentialFields, verifyCredential } from "@/lib/integrations-verify";
 
@@ -45,4 +46,15 @@ export async function disconnectIntegration(_p: ActionState, form: FormData): Pr
     }
     return "Disconnected. The stored key was deleted.";
   }, ["/integrations", "/opportunities"]);
+}
+
+/** Test the free OpenStreetMap servers from this deployment. */
+export async function checkOsmAction(_p: ActionState, _form: FormData): Promise<ActionState> {
+  return guarded("staff", async () => {
+    const results = await checkOverpassServers();
+    const ok = results.filter((r) => r.ok).length;
+    const lines = results.map((r) => `${r.ok ? "OK" : "Problem"}: ${r.host} ${r.ok ? r.detail : `(${r.detail})`}`).join(" · ");
+    if (ok === 0) throw new Error(`No OpenStreetMap server answered from this site. ${lines}`);
+    return `${ok} of ${results.length} servers working. ${lines}`;
+  });
 }

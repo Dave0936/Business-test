@@ -59,26 +59,55 @@ export function mapOverpassElement(el: OverpassElement, q: DiscoveryQuery, categ
 
 /** Public Overpass instances, tried in order; the configured endpoint comes first. */
 export function overpassEndpoints(): string[] {
-  return [...new Set([env.overpassEndpoint, "https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"])];
+  return [...new Set([env.overpassEndpoint, "https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter", "https://overpass.kumi.systems/api/interpreter"].filter(Boolean) as string[])];
 }
 
-async function overpass(query: string): Promise<{ elements: OverpassElement[] }> {
+const PER_SERVER_TIMEOUT_MS = 20_000;
+
+/** Plain description of one server's failure. */
+function describeOverpassFailure(host: string, e: unknown, status?: number): string {
+  if (status === 429) return `${host} is rate-limiting requests`;
+  if (status === 504 || status === 503) return `${host} is overloaded`;
+  if (status) return `${host} answered HTTP ${status}`;
+  const err = e as Error;
+  if (err?.name === "TimeoutError" || /aborted|timeout/i.test(err?.message ?? "")) return `${host} did not answer within ${PER_SERVER_TIMEOUT_MS / 1000} seconds`;
+  return `${host}: ${err?.message ?? "request failed"}`;
+}
+
+export async function overpass(query: string, f: typeof fetch = fetch): Promise<{ elements: OverpassElement[]; endpoint: string }> {
   const errors: string[] = [];
   for (const endpoint of overpassEndpoints()) {
+    const host = new URL(endpoint).host;
     try {
-      const res = await fetch(endpoint, {
+      const res = await f(endpoint, {
         method: "POST",
-        headers: { "user-agent": UA(), "content-type": "application/x-www-form-urlencoded" },
+        headers: { "user-agent": UA(), "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
         body: new URLSearchParams({ data: query }),
-        signal: AbortSignal.timeout(40_000),
+        signal: AbortSignal.timeout(PER_SERVER_TIMEOUT_MS),
       });
-      if (res.ok) return (await res.json()) as { elements: OverpassElement[] };
-      errors.push(`${new URL(endpoint).host}: HTTP ${res.status}`);
+      if (res.ok) return { ...((await res.json()) as { elements: OverpassElement[] }), endpoint };
+      errors.push(describeOverpassFailure(host, null, res.status));
     } catch (e) {
-      errors.push(`${new URL(endpoint).host}: ${(e as Error).message}`);
+      errors.push(describeOverpassFailure(host, e));
     }
   }
-  throw new ProviderError("openstreetmap", `All Overpass servers failed (${errors.join("; ")})`);
+  throw new ProviderError("openstreetmap", `The free OpenStreetMap servers are busy or unreachable right now, so the search will retry automatically. Details: ${errors.join("; ")}. For dependable searches, connect SerpAPI.`);
+}
+
+/** Try each Overpass server with a tiny query and report how each one answers (Integrations page). */
+export async function checkOverpassServers(f: typeof fetch = fetch): Promise<{ host: string; ok: boolean; ms: number; detail: string }[]> {
+  const query = '[out:json][timeout:10];node["amenity"="cafe"](around:300,51.5074,-0.1278);out 1;';
+  return Promise.all(overpassEndpoints().map(async (endpoint) => {
+    const host = new URL(endpoint).host;
+    const started = Date.now();
+    try {
+      const res = await f(endpoint, { method: "POST", headers: { "user-agent": UA(), "content-type": "application/x-www-form-urlencoded", accept: "application/json" }, body: new URLSearchParams({ data: query }), signal: AbortSignal.timeout(PER_SERVER_TIMEOUT_MS) });
+      const ms = Date.now() - started;
+      return res.ok ? { host, ok: true, ms, detail: `answered in ${(ms / 1000).toFixed(1)} s` } : { host, ok: false, ms, detail: describeOverpassFailure(host, null, res.status) };
+    } catch (e) {
+      return { host, ok: false, ms: Date.now() - started, detail: describeOverpassFailure(host, e) };
+    }
+  }));
 }
 
 export const openStreetMapProvider: DiscoveryProvider = {
