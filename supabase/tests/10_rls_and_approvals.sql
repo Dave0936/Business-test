@@ -44,7 +44,7 @@ select pg_temp.assert((select count(*) from public.organisations) = 1, 'B sees o
 -- ===== Staff A adds a business and drafts an email
 set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000c","role":"authenticated"}';
 insert into public.businesses (organisation_id, name, normalized_name, country_code, city, email, dedupe_key, status)
-values (:'org_a', 'Harbour Cafe', 'harbour cafe', 'GB', 'Leith', 'hello@harbour.example', 'name:harbour cafe|gb|leith', 'qualified')
+values (:'org_a', 'Harbour Cafe', 'harbour cafe', 'GB', 'Leith', 'hello@harbourcafe.co.uk', 'name:harbour cafe|gb|leith', 'qualified')
 returning id as biz \gset
 
 select pg_temp.expect_error(
@@ -53,10 +53,10 @@ select pg_temp.expect_error(
   'must start as draft');
 
 insert into public.email_drafts (organisation_id, business_id, to_email, subject, body_text, status, idempotency_key, content_hash, compliance)
-values (:'org_a', :'biz', 'hello@harbour.example', 'A concept', 'Hello there', 'awaiting_approval', 'k1', 'ignored', '{"allowed": false}')
+values (:'org_a', :'biz', 'hello@harbourcafe.co.uk', 'A concept', 'Hello there', 'awaiting_approval', 'k1', 'ignored', '{"allowed": false}')
 returning id as email1 \gset
 
-select pg_temp.assert((select content_hash from public.email_drafts where id = :'email1') = public.email_content_hash('hello@harbour.example','A concept','Hello there'), 'hash computed by DB, not client');
+select pg_temp.assert((select content_hash from public.email_drafts where id = :'email1') = public.email_content_hash('hello@harbourcafe.co.uk','A concept','Hello there'), 'hash computed by DB, not client');
 
 select pg_temp.expect_error(format($q$select public.decide_approval('email', %L, 'approved')$q$, :'email1'), 'only owners or administrators');
 select pg_temp.expect_error(format($q$update public.email_drafts set status = 'approved' where id = %L$q$, :'email1'), 'no approval');
@@ -109,8 +109,19 @@ select pg_temp.expect_error(format($q$update public.email_drafts set body_text =
 
 -- Duplicate initial email to the same recipient is rejected
 select pg_temp.expect_error(
-  format($q$insert into public.email_drafts (organisation_id, business_id, to_email, subject, body_text, status, idempotency_key, content_hash) values (%L, %L, 'HELLO@harbour.example', 's', 'b', 'draft', 'k2', 'x')$q$, :'org_a', :'biz'),
+  format($q$insert into public.email_drafts (organisation_id, business_id, to_email, subject, body_text, status, idempotency_key, content_hash) values (%L, %L, 'HELLO@harbourcafe.co.uk', 's', 'b', 'draft', 'k2', 'x')$q$, :'org_a', :'biz'),
   'duplicate key');
+
+-- ===== Demo and reserved-domain recipients can never be approved
+set role authenticated;
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated"}';
+insert into public.businesses (organisation_id, name, normalized_name, country_code, dedupe_key, is_demo)
+values (:'org_a', '[Demo] Cafe', 'demo cafe', 'GB', 'name:demo cafe|gb|', true) returning id as demo_biz \gset
+insert into public.email_drafts (organisation_id, business_id, to_email, subject, body_text, status, idempotency_key, content_hash, compliance)
+values (:'org_a', :'demo_biz', 'hello@demo-cafe.invalid', 's', 'b', 'awaiting_approval', 'kd', 'x', '{"allowed": true}') returning id as demo_email \gset
+select pg_temp.expect_error(format($q$select public.decide_approval('email', %L, 'approved')$q$, :'demo_email'), 'demo or reserved-domain');
+set role service_role;
+set request.jwt.claims = '{"role":"service_role"}';
 
 -- ===== Websites: QA + approval required before deployment
 insert into public.generated_websites (organisation_id, business_id, slug, status) values (:'org_a', :'biz', 'harbour-cafe', 'generated') returning id as site \gset
