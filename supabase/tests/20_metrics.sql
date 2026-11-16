@@ -13,6 +13,10 @@ do $$ declare m jsonb; begin
   m := public.dashboard_metrics((select id from public.organisations limit 1), 'gb');
   if (m->>'discovered')::int <> 1 then raise exception 'country filter failed %', m; end if;
   if (select count(*) from public.analytics_breakdown((select id from public.organisations limit 1), 'country_code')) <> 2 then raise exception 'breakdown failed'; end if;
+  m := public.dashboard_trends((select id from public.organisations limit 1));
+  if (m->'discovered'->>0)::int <> 2 or (m->'discovered'->>1)::int <> 0 then raise exception 'trends wrong %', m; end if;
+  if (select count(*) from public.weekly_discoveries((select id from public.organisations limit 1))) <> 8 then raise exception 'weeks not zero-filled'; end if;
+  if (select sum(discovered) from public.weekly_discoveries((select id from public.organisations limit 1))) <> 2 then raise exception 'weekly counts wrong'; end if;
 end $$;
 set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000e2","role":"authenticated"}';
 do $$ begin

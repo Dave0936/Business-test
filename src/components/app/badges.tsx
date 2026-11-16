@@ -18,7 +18,7 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function ScoreBadge({ score }: { score: number | null | undefined }) {
   if (score === null || score === undefined) return <span className="text-muted-foreground">—</span>;
-  const tone = score >= 70 ? "bg-success/12 text-success" : score >= 45 ? "bg-warning/18 text-[oklch(0.45_0.12_70)]" : "bg-muted text-muted-foreground";
+  const tone = score >= 70 ? "bg-success/12 text-success" : score >= 45 ? "bg-warning/15 text-warning" : "bg-muted text-muted-foreground";
   return <span className={`inline-flex min-w-9 justify-center rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums ${tone}`}>{score}</span>;
 }
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -7,9 +8,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const theme = (await cookies()).get("wo_theme")?.value;
+  const cls = theme === "dark" ? "dark" : theme === "light" ? "light" : "";
   return (
-    <html lang="en-GB" className="h-full">
+    <html lang="en-GB" className={`h-full ${cls}`} suppressHydrationWarning>
       <body className="min-h-full">{children}</body>
     </html>
   );

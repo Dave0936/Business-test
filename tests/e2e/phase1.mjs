@@ -66,7 +66,7 @@ try {
     check("demo data loads through the pipeline and confirms", ok, ok ? "" : (await page.locator("[role=status]").allTextContents()).join(" "));
   }
   await page.goto(`${BASE}/overview`);
-  const stat = async (label) => Number((await page.locator(`p:text-is("${label}") + p`).first().textContent())?.trim() || NaN);
+  const stat = async (label) => Number((await page.locator(`dt:text-is("${label}") + dd`).first().textContent())?.trim() || NaN);
   const discovered = await stat("Businesses discovered");
   const qualified = await stat("Qualified leads");
   const awaiting = await stat("Awaiting approval");
@@ -127,7 +127,7 @@ try {
     const inviteVisible = await sp.locator("text=Invite").count();
     check("staff cannot manage the team", inviteVisible === 0);
     await sp.goto(`${BASE}/overview`);
-    check("staff sees the same organisation's data", (await sp.locator(`p:text-is("Businesses discovered") + p`).first().textContent())?.trim() === String(discovered));
+    check("staff sees the same organisation's data", (await sp.locator(`dt:text-is("Businesses discovered") + dd`).first().textContent())?.trim() === String(discovered));
     await s.close();
   }
 } finally {

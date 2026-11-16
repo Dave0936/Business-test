@@ -1,37 +1,143 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:is(.dark *));
+/*
+ * Theme: warm cream (light) and deep navy (dark), navy / steel / sky / cream with amber and
+ * burnt-orange accents. Components use tokens only, never raw colours, so both modes come
+ * from these blocks. <html class="dark"> or "light" forces a mode; with neither, the
+ * device preference decides.
+ * Chart series colours are validated (dataviz skill: lightness band, chroma, colour-vision
+ * separation, contrast) against the card surface of each mode.
+ */
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.985 0.002 247);
-  --foreground: oklch(0.2 0.02 265);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.02 265);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.02 265);
-  --primary: oklch(0.46 0.17 268);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.955 0.008 265);
-  --secondary-foreground: oklch(0.25 0.03 265);
-  --muted: oklch(0.96 0.006 265);
-  --muted-foreground: oklch(0.5 0.02 265);
-  --accent: oklch(0.95 0.02 268);
-  --accent-foreground: oklch(0.3 0.1 268);
-  --destructive: oklch(0.55 0.2 27);
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.55 0.13 155);
-  --warning: oklch(0.72 0.15 75);
-  --border: oklch(0.92 0.006 265);
-  --input: oklch(0.9 0.008 265);
-  --ring: oklch(0.55 0.15 268);
-  --sidebar: oklch(0.2 0.03 268);
-  --sidebar-foreground: oklch(0.88 0.02 268);
-  --sidebar-muted: oklch(0.65 0.03 268);
-  --sidebar-active: oklch(0.3 0.06 268);
+  --radius: 0.875rem;
+  /* Brand navy: identical in both modes (login panel, logo mark). */
+  --brand: #1f3b57;
+  --brand-foreground: #f6efe2;
+  --background: #f4eee3;
+  --foreground: #1b2a3a;
+  --card: #fffdf8;
+  --card-foreground: #1b2a3a;
+  --popover: #fffdf8;
+  --popover-foreground: #1b2a3a;
+  --primary: #1f3b57;
+  --primary-foreground: #fffdf8;
+  --secondary: #ece3d2;
+  --secondary-foreground: #1f3b57;
+  --muted: #f1eadd;
+  --muted-foreground: #5d6570;
+  --accent: #e7eef1;
+  --accent-foreground: #1f3b57;
+  --highlight: #e3982e;
+  --highlight-foreground: #1b2a3a;
+  --destructive: #b5432a;
+  --destructive-foreground: #fffdf8;
+  --success: #2f7a4e;
+  --warning: #b07a0c;
+  --border: #e6dccb;
+  --input: #d9cdb8;
+  --ring: #2e6e8e;
+  --sidebar: #fbf7ef;
+  --sidebar-foreground: #1b2a3a;
+  --sidebar-muted: #6b6e70;
+  --sidebar-hover: #f0e8da;
+  --sidebar-active: #1f3b57;
+  --sidebar-active-foreground: #fffdf8;
+  --series-1: #2a78d6;
+  --series-2: #d9622b;
+  --series-3: #1a9e8a;
+  --series-4: #e09a00;
+  --series-5: #6250d6;
+  --series-6: #d55181;
+  --series-other: #a59e91;
+  --grid: #ece4d6;
+}
+
+/* Dark: deep navy. Declared twice: for an explicit choice, and for the device preference. */
+:root.dark {
+  --background: #0e1d2b;
+  --foreground: #eee7da;
+  --card: #16283a;
+  --card-foreground: #eee7da;
+  --popover: #16283a;
+  --popover-foreground: #eee7da;
+  --primary: #a9cfe0;
+  --primary-foreground: #0e1d2b;
+  --secondary: #22384d;
+  --secondary-foreground: #eee7da;
+  --muted: #1b3045;
+  --muted-foreground: #a9b4be;
+  --accent: #213a51;
+  --accent-foreground: #eee7da;
+  --highlight: #e8a13a;
+  --highlight-foreground: #0e1d2b;
+  --destructive: #e07055;
+  --destructive-foreground: #0e1d2b;
+  --success: #4fbf7d;
+  --warning: #e0a83a;
+  --border: #27405a;
+  --input: #2e4a64;
+  --ring: #8db8c8;
+  --sidebar: #12233a;
+  --sidebar-foreground: #e6dfd2;
+  --sidebar-muted: #8fa0b0;
+  --sidebar-hover: #1b3149;
+  --sidebar-active: #ece4d5;
+  --sidebar-active-foreground: #0e1d2b;
+  --series-1: #3987e5;
+  --series-2: #e0712f;
+  --series-3: #199e88;
+  --series-4: #b88000;
+  --series-5: #9085e9;
+  --series-6: #d55181;
+  --series-other: #6d7f90;
+  --grid: #223a52;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: #0e1d2b;
+    --foreground: #eee7da;
+    --card: #16283a;
+    --card-foreground: #eee7da;
+    --popover: #16283a;
+    --popover-foreground: #eee7da;
+    --primary: #a9cfe0;
+    --primary-foreground: #0e1d2b;
+    --secondary: #22384d;
+    --secondary-foreground: #eee7da;
+    --muted: #1b3045;
+    --muted-foreground: #a9b4be;
+    --accent: #213a51;
+    --accent-foreground: #eee7da;
+    --highlight: #e8a13a;
+    --highlight-foreground: #0e1d2b;
+    --destructive: #e07055;
+    --destructive-foreground: #0e1d2b;
+    --success: #4fbf7d;
+    --warning: #e0a83a;
+    --border: #27405a;
+    --input: #2e4a64;
+    --ring: #8db8c8;
+    --sidebar: #12233a;
+    --sidebar-foreground: #e6dfd2;
+    --sidebar-muted: #8fa0b0;
+    --sidebar-hover: #1b3149;
+    --sidebar-active: #ece4d5;
+    --sidebar-active-foreground: #0e1d2b;
+    --series-1: #3987e5;
+    --series-2: #e0712f;
+    --series-3: #199e88;
+    --series-4: #b88000;
+    --series-5: #9085e9;
+    --series-6: #d55181;
+    --series-other: #6d7f90;
+    --grid: #223a52;
+  }
 }
 
 @theme inline {
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -46,6 +152,8 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-highlight: var(--highlight);
+  --color-highlight-foreground: var(--highlight-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
@@ -56,9 +164,18 @@
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-hover: var(--sidebar-hover);
   --color-sidebar-active: var(--sidebar-active);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --color-sidebar-active-foreground: var(--sidebar-active-foreground);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-6: var(--series-6);
+  --color-series-other: var(--series-other);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -68,6 +185,17 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    html:not(.light) {
+      color-scheme: dark;
+    }
   }
   body {
     @apply bg-background text-foreground antialiased;
