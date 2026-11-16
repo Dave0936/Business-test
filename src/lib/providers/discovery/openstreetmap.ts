@@ -63,6 +63,7 @@ export function overpassEndpoints(): string[] {
 }
 
 const PER_SERVER_TIMEOUT_MS = 20_000;
+export const OSM_UNREACHABLE = "The free OpenStreetMap servers did not answer from this site.";
 
 /** Plain description of one server's failure. */
 function describeOverpassFailure(host: string, e: unknown, status?: number): string {
@@ -91,7 +92,7 @@ export async function overpass(query: string, f: typeof fetch = fetch): Promise<
       errors.push(describeOverpassFailure(host, e));
     }
   }
-  throw new ProviderError("openstreetmap", `The free OpenStreetMap servers are busy or unreachable right now, so the search will retry automatically. Details: ${errors.join("; ")}. For dependable searches, connect SerpAPI.`);
+  throw new ProviderError("openstreetmap", `${OSM_UNREACHABLE} Details: ${errors.join("; ")}. For dependable searches, connect SerpAPI.`);
 }
 
 /** Try each Overpass server with a tiny query and report how each one answers (Integrations page). */

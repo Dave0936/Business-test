@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { StatusBadge } from "@/components/app/badges";
 import { COUNTRIES, INDUSTRIES } from "@/lib/industries";
 import { DISCOVERY_PROVIDERS } from "@/lib/providers/discovery";
+import { isMarkedUnreachable } from "@/lib/providers/discovery/health";
 import { aiAvailable } from "@/lib/ai/client";
 import { formatDate } from "@/lib/utils";
 import { addManual, importCsv } from "./actions";
@@ -23,14 +24,16 @@ export const metadata: Metadata = { title: "Find Opportunities" };
 export default async function OpportunitiesPage() {
   const ctx = await getOrgContext();
   const { data: runs } = await ctx.supabase.from("automation_runs").select("id, status, started_at, stats, workflow_id").eq("organisation_id", ctx.organisationId).is("workflow_id", null).order("started_at", { ascending: false }).limit(8);
-  const [status, countries, { data: org }] = await Promise.all([
+  const [status, countries, { data: org }, { data: health }] = await Promise.all([
     integrationStatus(ctx.supabase, ctx.organisationId),
     listCountries(),
     ctx.supabase.from("organisations").select("default_country_code").eq("id", ctx.organisationId).single(),
+    ctx.supabase.from("provider_health").select("provider, ok, checked_at").eq("organisation_id", ctx.organisationId),
   ]);
   const providers = DISCOVERY_PROVIDERS.map((p) => {
-    const available = !p.requires || status[p.requires].mode === "live";
-    return { id: p.id, label: p.label, description: p.description, available, reason: available ? undefined : "connect in Integrations", paid: Boolean(p.costNote), attribution: p.terms.attribution, retention: p.terms.retentionDays };
+    const unreachable = isMarkedUnreachable(health?.find((h) => h.provider === p.id));
+    const available = (!p.requires || status[p.requires].mode === "live") && !unreachable;
+    return { id: p.id, label: p.label, description: p.description, available, reason: available ? undefined : unreachable ? "not reachable from this site; re-check in Integrations" : "connect in Integrations", paid: Boolean(p.costNote), attribution: p.terms.attribution, retention: p.terms.retentionDays };
   });
   const writable = canWrite(ctx.role);
 

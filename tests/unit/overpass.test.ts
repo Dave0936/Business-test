@@ -23,7 +23,7 @@ describe("OpenStreetMap (Overpass) failover", () => {
 
   it("explains in plain English when every server fails", async () => {
     const f = vi.fn().mockResolvedValueOnce(new Response("", { status: 504 })).mockImplementation(timeout);
-    await expect(overpass("q", f as unknown as typeof fetch)).rejects.toThrow(/free OpenStreetMap servers are busy.*retry automatically.*overloaded.*did not answer within 20 seconds.*SerpAPI/);
+    await expect(overpass("q", f as unknown as typeof fetch)).rejects.toThrow(/free OpenStreetMap servers did not answer from this site.*overloaded.*did not answer within 20 seconds.*SerpAPI/);
   });
 
   it("reports each server's health for the Integrations page", async () => {
@@ -31,5 +31,16 @@ describe("OpenStreetMap (Overpass) failover", () => {
     const r = await checkOverpassServers(f as unknown as typeof fetch);
     expect(r.find((x) => x.host === "overpass.kumi.systems")).toMatchObject({ ok: false });
     expect(r.filter((x) => x.ok).length).toBe(r.length - 1);
+  });
+});
+
+describe("provider health", () => {
+  it("marks a source unreachable for a day after a failure, until a check succeeds", async () => {
+    const { isMarkedUnreachable } = await import("@/lib/providers/discovery/health");
+    const now = Date.parse("2026-11-16T20:00:00Z");
+    expect(isMarkedUnreachable(null, now)).toBe(false);
+    expect(isMarkedUnreachable({ ok: false, checked_at: "2026-11-16T19:00:00Z" }, now)).toBe(true);
+    expect(isMarkedUnreachable({ ok: false, checked_at: "2026-11-15T19:00:00Z" }, now)).toBe(false);
+    expect(isMarkedUnreachable({ ok: true, checked_at: "2026-11-16T19:00:00Z" }, now)).toBe(false);
   });
 });

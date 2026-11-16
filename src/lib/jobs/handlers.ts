@@ -5,6 +5,8 @@ import { ingestDiscovered } from "@/lib/crm/ingest";
 import { auditBusiness, type BusinessRow } from "@/lib/audit/run";
 import { produceBrief } from "@/lib/design/research";
 import { runBuildSlice, startBuild } from "@/lib/sites/bespoke/runner";
+import { recordProviderHealth } from "@/lib/providers/discovery/health";
+import { OSM_UNREACHABLE } from "@/lib/providers/discovery/openstreetmap";
 import { processImage } from "@/lib/sites/generated-images";
 import { generateWebsite } from "@/lib/sites/builder";
 import { deployApprovedWebsite, DeploymentBlockedError } from "@/lib/deploy/deploy";
@@ -56,7 +58,9 @@ export async function handleJob(db: SupabaseClient, job: JobRow): Promise<Record
       let found;
       try {
         found = await provider.search(query, credentials);
+        if (provider.id === "openstreetmap") await recordProviderHealth(db, org, "openstreetmap", true, null);
       } catch (e) {
+        if (provider.id === "openstreetmap" && (e as Error).message.includes(OSM_UNREACHABLE)) await recordProviderHealth(db, org, "openstreetmap", false, (e as Error).message);
         // Bad keys and exhausted quotas will not fix themselves on retry.
         if (/invalid api key|not connected|run out of searches|account.*(suspended|disabled)|HTTP 401|HTTP 403/i.test((e as Error).message)) throw new PermanentJobError((e as Error).message);
         throw e;
