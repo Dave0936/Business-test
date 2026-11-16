@@ -76,3 +76,31 @@ export async function removeMember(_p: ActionState, form: FormData): Promise<Act
     return "Member removed.";
   }, "/settings");
 }
+
+/** Change the signed-in user's own password (any role). */
+export async function changePassword(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("read_only", async (ctx) => {
+    const password = str(form, "password");
+    if (password.length < 10) throw new Error("Use at least 10 characters.");
+    if (password !== str(form, "confirm")) throw new Error("The two passwords do not match.");
+    const { error } = await ctx.supabase.auth.updateUser({ password });
+    if (error) throw new Error(error.message);
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "account.password_changed", entityType: "user", entityId: ctx.user.id });
+    return "Password changed. Use it next time you sign in.";
+  });
+}
+
+/**
+ * Change the signed-in user's email. Supabase sends a confirmation link to the new
+ * address (and, with "secure email change" on, to the old one); the change applies once confirmed.
+ */
+export async function changeEmail(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("read_only", async (ctx) => {
+    const email = z.string().trim().toLowerCase().email("Enter a valid email address.").parse(str(form, "email"));
+    if (email === ctx.user.email) throw new Error("That is already your email address.");
+    const { error } = await ctx.supabase.auth.updateUser({ email }, { emailRedirectTo: `${env.appUrl}/auth/callback?next=/settings` });
+    if (error) throw new Error(error.message);
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "account.email_change_requested", entityType: "user", entityId: ctx.user.id, data: { to: email } });
+    return `Check ${email} for a confirmation link. Your sign-in email changes once you open it.`;
+  });
+}

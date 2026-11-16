@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { COUNTRIES, humanise } from "@/lib/industries";
 import { formatDate } from "@/lib/utils";
-import { changeRole, inviteMember, removeMember, saveOrganisation } from "./actions";
+import { changeEmail, changePassword, changeRole, inviteMember, removeMember, saveOrganisation } from "./actions";
 import { removeDemoData } from "../overview/actions";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -85,6 +85,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </div>
               </ActionForm>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Your account</CardTitle><CardDescription>Signed in as {ctx.user.email}.</CardDescription></CardHeader>
+          <CardContent className="space-y-6">
+            <ActionForm action={changePassword} submitLabel="Change password" className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="New password" htmlFor="new-password"><Input id="new-password" name="password" type="password" autoComplete="new-password" minLength={10} required /></Field>
+                <Field label="Repeat new password" htmlFor="confirm-password"><Input id="confirm-password" name="confirm" type="password" autoComplete="new-password" minLength={10} required /></Field>
+              </div>
+            </ActionForm>
+            <ActionForm action={changeEmail} submitLabel="Change email" className="space-y-3 border-t pt-5">
+              <Field label="New email address" htmlFor="new-email" hint="We send a confirmation link to the new address. Your sign-in email changes when you open it."><Input id="new-email" name="email" type="email" autoComplete="email" required /></Field>
+            </ActionForm>
           </CardContent>
         </Card>
 
