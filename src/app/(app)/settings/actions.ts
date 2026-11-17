@@ -130,3 +130,17 @@ export async function saveLia(_p: ActionState, form: FormData): Promise<ActionSt
     return "Assessment saved. Re-check any blocked emails so they pick it up.";
   }, ["/settings", "/emails"]);
 }
+
+/** The agency's house style: design guidance the site builder follows on every build. */
+export async function saveHouseStyle(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("administrator", async (ctx) => {
+    const text = String(form.get("houseStyle") ?? "").replace(/\r\n/g, "\n").trim();
+    if (text.length > 20000) throw new Error("Keep the house style under 20,000 characters.");
+    const { data: org, error } = await ctx.supabase.from("organisations").select("settings").eq("id", ctx.organisationId).single();
+    if (error) throw error;
+    const { error: uErr } = await ctx.supabase.from("organisations").update({ settings: { ...((org.settings as Record<string, unknown>) ?? {}), house_style: text || null } }).eq("id", ctx.organisationId);
+    if (uErr) throw uErr;
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "design.house_style_saved", entityType: "organisation", entityId: ctx.organisationId, data: { length: text.length } });
+    return text ? "Saved. Every build from now on follows it." : "Cleared.";
+  }, "/settings");
+}

@@ -41,7 +41,7 @@ interface BusinessForSite {
 export async function loadContext(db: SupabaseClient, organisationId: string, businessId: string) {
   const [{ data: b, error }, { data: org, error: oErr }] = await Promise.all([
     db.from("businesses").select("id, name, category, city, region, country_code, phone, email, address, language, industry_id, website_url, is_demo").eq("id", businessId).eq("organisation_id", organisationId).single(),
-    db.from("organisations").select("name, agency_name, agency_website, agency_reply_email").eq("id", organisationId).single(),
+    db.from("organisations").select("name, agency_name, agency_website, agency_reply_email, settings").eq("id", organisationId).single(),
   ]);
   if (error) throw error;
   if (oErr) throw oErr;
@@ -75,7 +75,7 @@ export async function resolveImages(db: SupabaseClient, organisationId: string, 
 }
 
 /** Add uploaded images (stored in Supabase Storage) to the static bundle. */
-async function withUploads(db: SupabaseClient, spec: SiteSpec, files: SiteFiles): Promise<SiteFiles> {
+export async function withUploads(db: SupabaseClient, spec: SiteSpec, files: SiteFiles): Promise<SiteFiles> {
   for (const img of Object.values(spec.images)) {
     if (img.kind !== "upload") continue;
     if (!img.storagePath) continue;

@@ -25,6 +25,7 @@ import { BriefView } from "./brief-view";
 import { BriefEditor } from "./brief-editor";
 import {
   addSiteAction, answersAction, briefAction, collectPinsAction, discoverSitesAction, pickAction, questionsAction, saveStudioSetup, uploadAction,
+  saveCreativeBriefAction,
 } from "../studio-actions";
 import { buildSiteAction } from "../../builder/actions";
 
@@ -103,6 +104,19 @@ export default async function StudioPage({ params }: { params: Promise<{ busines
               <Field label="Site type" htmlFor="siteType"><Select id="siteType" name="siteType" defaultValue={siteType}>{SITE_TYPE_IDS.map((t) => <option key={t} value={t}>{SITE_TYPES[t].label}</option>)}</Select></Field>
             </ActionForm>
             <p className="mt-2 text-xs text-muted-foreground">Sections: {SITE_TYPES[siteType].sections.join(" · ")}. Extra languages are set with the idea above.</p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="creative-brief">
+          <CardHeader>
+            <CardTitle>Creative brief</CardTitle>
+            <CardDescription>Your own design direction for this site, as long as you like: creative direction, palette, typography, page sections, motion. The builder treats it as the main brief. Facts we haven&apos;t verified (menus, prices, opening hours, social links) appear as marked placeholders, never invented. Upload screenshots of sites you admire under &ldquo;Upload a picture&rdquo;: the builder sees them.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ActionForm action={saveCreativeBriefAction} submitLabel="Save creative brief" disabled={!editable}>
+              <input type="hidden" name="businessId" value={businessId} />
+              <Textarea name="creativeBrief" rows={10} maxLength={20000} defaultValue={(studio as { creative_brief?: string | null } | null)?.creative_brief ?? ""} placeholder="For example: a bold, editorial look led by oversized condensed type and a strong mid blue, with asymmetric image and text panels and a scrolling ticker…" aria-label="Creative brief" />
+            </ActionForm>
           </CardContent>
         </Card>
 

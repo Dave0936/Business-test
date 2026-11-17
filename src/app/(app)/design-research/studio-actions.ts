@@ -162,3 +162,17 @@ export async function discoverSitesAction(_p: ActionState, form: FormData): Prom
     return r.note;
   }, path(id));
 }
+
+/** The designer's own creative brief for this site: the main design direction for the builder. */
+export async function saveCreativeBriefAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  const id = str(form, "businessId");
+  return guarded("staff", async (ctx) => {
+    const { studio } = await open(ctx, form);
+    const text = String(form.get("creativeBrief") ?? "").replace(/\r\n/g, "\n").trim();
+    if (text.length > 20000) throw new Error("Keep the creative brief under 20,000 characters.");
+    const { error } = await ctx.supabase.from("design_studios").update({ creative_brief: text || null }).eq("id", studio.id).eq("organisation_id", ctx.organisationId);
+    if (error) throw error;
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "design.creative_brief_saved", entityType: "business", entityId: id, data: { length: text.length } });
+    return text ? "Saved. The next build or revision follows it." : "Cleared.";
+  }, path(id));
+}

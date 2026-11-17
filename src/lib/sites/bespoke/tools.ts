@@ -39,6 +39,12 @@ export const BUILD_TOOLS: Anthropic.Beta.BetaToolUnion[] = [
     input_schema: { type: "object", additionalProperties: false, required: [], properties: {} },
   },
   {
+    name: "view_page",
+    description: "See a page of the draft as a visitor would: a screenshot of the whole page (as published, with placeholders filled) on a 1280px desktop or a 390px phone. Use it to judge and improve the design.",
+    strict: true,
+    input_schema: { type: "object", additionalProperties: false, required: ["path", "device"], properties: { path: { type: "string" }, device: { type: "string", enum: ["desktop", "phone"] } } },
+  },
+  {
     name: "finish",
     description: "Finish the build. Only accepted when the latest check_site passed and nothing changed since. Give a short summary of the design and up to five suggestions for the designer.",
     strict: true,
@@ -63,7 +69,12 @@ export interface DraftState {
   finished: { summary: string; suggestions: string[] } | null;
   /** Page limit for this build (8 per language). */
   maxPages?: number;
+  /** Pages looked at with view_page ("index.html:desktop"), when rendering is available. */
+  viewed?: string[];
+  canView?: boolean;
 }
+
+export const MAX_VIEWS = 16;
 
 export interface ToolOutcome {
   content: string;
@@ -118,11 +129,17 @@ export function executeBuildTool(state: DraftState, name: string, input: Record<
       if (!state.lastCheck) return err("Run check_site first.");
       if (state.dirtySinceCheck) return err("Files changed since the last check. Run check_site again.");
       if (!state.lastCheck.passed) return err("The last check failed. Fix the problems and run check_site again.");
+      const seen = new Set(state.viewed ?? []);
+      if (state.canView && (!seen.has("index.html:desktop") || !seen.has("index.html:phone"))) {
+        return err("Look at index.html with view_page on desktop and on phone first, and improve anything weak.");
+      }
       const summary = String(input.summary ?? "").slice(0, 1500);
       const suggestions = (Array.isArray(input.suggestions) ? input.suggestions : []).map((s) => String(s).slice(0, 300)).slice(0, 5);
       state.finished = { summary, suggestions };
       return { content: "Build finished.", isError: false, activity: "Finished" };
     }
+    case "view_page":
+      return err("Page rendering is not available in this build. Continue without it.");
     default:
       return err(`Unknown tool ${name}.`);
   }

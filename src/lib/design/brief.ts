@@ -6,6 +6,7 @@ export const FONT_CHOICES = [
   "Inter", "DM Sans", "Manrope", "Outfit", "Plus Jakarta Sans", "Work Sans", "Source Sans 3", "Nunito Sans",
   "Playfair Display", "Fraunces", "Cormorant Garamond", "Libre Baskerville", "Lora", "DM Serif Display",
   "Space Grotesk", "Sora", "Archivo", "Barlow", "Oswald", "Bebas Neue", "Poppins", "Montserrat", "Raleway",
+  "Anton", "Archivo Black", "Big Shoulders Display", "Syne", "Unbounded", "Space Mono", "Instrument Serif", "Dela Gothic One",
 ] as const;
 
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);

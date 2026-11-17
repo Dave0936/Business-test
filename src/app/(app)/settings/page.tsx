@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { COUNTRIES, humanise } from "@/lib/industries";
 import { formatDate } from "@/lib/utils";
-import { changeEmail, changePassword, changeRole, inviteMember, removeMember, saveLia, saveOrganisation } from "./actions";
+import { changeEmail, changePassword, changeRole, inviteMember, removeMember, saveHouseStyle, saveLia, saveOrganisation } from "./actions";
 import { removeDemoData } from "../overview/actions";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -46,6 +46,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <Alert variant="success" className="mb-5"><AlertTitle>Workspace created</AlertTitle><AlertDescription>Add your agency details next. They identify you in every prototype and email footer.</AlertDescription></Alert>
       )}
       <div className="grid gap-5 xl:grid-cols-2">
+        <Card className="xl:col-span-2" data-testid="house-style">
+          <CardHeader>
+            <CardTitle>House style for websites</CardTitle>
+            <CardDescription>Design guidance the builder follows on every site you make: the look, typography, layout habits and level of ambition you want, and anything to avoid. Each site can add its own creative brief in its design studio. Honesty rules always apply.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ActionForm action={saveHouseStyle} submitLabel="Save house style" disabled={!admin}>
+              <Textarea name="houseStyle" rows={8} maxLength={20000} defaultValue={((org.settings ?? {}) as { house_style?: string }).house_style ?? ""} placeholder="For example: editorial and art-directed, never template-like. Typography as a graphic element, confident colour blocking, asymmetric layouts, large well-cropped photography, subtle purposeful motion…" aria-label="House style" />
+            </ActionForm>
+          </CardContent>
+        </Card>
         <Card className="xl:col-span-2" data-testid="lia-card">
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center gap-2">Legitimate interests assessment {lia?.completed_at ? <Badge variant="success">Recorded {formatDate(lia.completed_at)}</Badge> : <Badge variant="warning">Not recorded</Badge>}</CardTitle>

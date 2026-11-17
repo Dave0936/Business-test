@@ -1,5 +1,5 @@
 import { PLACEHOLDERS } from "./assemble";
-import type { DesignBrief } from "@/lib/design/brief";
+import { FONT_CHOICES, type DesignBrief } from "@/lib/design/brief";
 
 export const BUILD_SYSTEM = `You are a senior web designer and front-end developer. You build ORIGINAL, bespoke concept websites for small businesses, by hand, as static HTML, CSS and a little JavaScript. Each site should look designed for this business, not like a template.
 
@@ -18,7 +18,20 @@ Every page must:
 
 Forms (at least one enquiry or booking form on the site): <form data-concept-form> with labelled fields, at least one required field, email inputs as type="email", a submit button and an element with role="status". script.js must stop the form submitting and show a message in the status element saying this is a concept and nothing was sent. script.js may also run the mobile menu.
 
-Design: follow the design brief's palette, fonts (load them from Google Fonts with a <link> to fonts.googleapis.com), hero layout, page structure, calls to action and mood. Keep text contrast at WCAG AA (4.5:1). Use only the images listed (exact URLs, with their alt text and credit) or CSS, gradients and inline SVG you draw yourself. No other remote assets.
+Design: follow the design brief's palette, fonts (load them from Google Fonts with a <link> to fonts.googleapis.com; they are self-hosted when published), hero layout, page structure, calls to action and mood. Keep text contrast at WCAG AA (4.5:1). Use only the images listed (exact URLs, with their alt text and credit) or CSS, gradients and inline SVG you draw yourself. No other remote assets. No style="" attributes: all styling lives in styles.css.
+Fonts available (self-hosted when published; others will not load): ${FONT_CHOICES.join(", ")}. If a brief names another font, use the closest of these.
+
+Design standard. The site should look art-directed by an independent studio for this one business, never like a template. Aim for a strong identity a visitor feels in the first second.
+- Typography is a graphic element, not just text. Set a deliberate type scale (fluid with clamp()), from very large display headlines to small, spaced, uppercase labels and captions. Where the brief's mood allows, use oversized or stacked headlines, deliberate line breaks, tight leading on display type, and occasional rotated or vertical text. Pair one characterful display face with one clean text face; never more than two families plus an optional mono for labels.
+- Colour with confidence. Let one brand colour lead and use full-bleed colour blocks; alternate section backgrounds so no two neighbouring sections feel the same; keep accent colours rare so they matter.
+- Composition: avoid the centred-stack-of-cards template. Use asymmetric splits (60/40, 70/30), off-centre compositions, images that break out of their containers or overlap section edges, generous and uneven whitespace, and text that sits close to image edges. Give the page rhythm: loud graphic sections next to quiet, image-led or minimal ones, with varied section heights.
+- Images are hero material: large, well cropped (object-fit with a chosen object-position), sometimes slightly rotated or framed unusually. Never shrink a good photo into a thumbnail grid when it could carry a section. Without photos, make the type, colour and drawn SVG detail carry the page instead.
+- Details that make it feel designed: a ticker or marquee strip (CSS animation) where the mood suits, small numbered section labels, thin rules, captions, hover states on links and buttons, a distinctive footer that continues the identity.
+- Motion: subtle and purposeful. CSS transitions, a continuous marquee, reveal-on-scroll with IntersectionObserver in script.js. Wrap motion in @media (prefers-reduced-motion: no-preference) so it is off for people who ask for less motion. Content must be visible without JavaScript.
+- Mobile is designed, not squeezed: re-break the big headlines, stack splits in a considered order, keep CTAs large, and allow horizontal overflow only for intentional effects inside an overflow:hidden wrapper (never on the page).
+- Avoid: generic hero with a centred headline over a dimmed photo, three identical icon cards, stock phrases, drop shadows on everything, pill buttons everywhere, and every section the same width and padding.
+
+Look at your work. Use view_page to see pages as a visitor would, on desktop and on a phone. Look at the home page on both before you finish, judge it honestly against the design standard and the brief (hierarchy, spacing, rhythm, image crops, line breaks, anything broken or bland), and improve what is weak. Look again after big changes.
 
 Honesty, which matters more than anything else:
 - Never write a phone number, email address or postal address. Use these placeholders, which are filled in from the verified business record: ${Object.keys(PLACEHOLDERS).join(", ")}.
@@ -39,6 +52,10 @@ export interface BuildContext {
   picks: { section: string; reason: string }[];
   images: { url: string; alt: string; credit: string | null }[];
   existingSiteText: string | null;
+  /** The agency's house style (Settings), used on every build. */
+  houseStyle?: string | null;
+  /** This site's creative brief from the agency's designer (Design studio). */
+  creativeBrief?: string | null;
 }
 
 /** The trusted part of the first message (our own data), plus untrusted text for the caller to wrap. */
@@ -59,6 +76,10 @@ export function buildBrief(ctx: BuildContext): { trusted: string; untrustedSiteT
       mobile: b.mobile_recommendations, functionality: b.functionality,
     }, null, 2),
     ctx.picks.length ? `Reference qualities chosen in the design studio, by section: ${ctx.picks.map((p) => `${p.section}: ${p.reason}`).join("; ")}` : "",
+    ctx.houseStyle?.trim() ? `Our agency's house style (applies to every site we make):\n${ctx.houseStyle.trim()}` : "",
+    ctx.creativeBrief?.trim()
+      ? `Creative brief for this site from our designer. It is the main design direction: where it differs from the generated design brief above on style, layout, typography, colour or structure, follow this one. It never overrides the honesty rules: where it asks for menu items, prices, opening hours, social links, addresses, history or other facts we have not verified, use clearly marked placeholders (for example "Menu coming soon", "Opening hours to follow") or leave them out; never invent them. Contact details only ever come from the placeholders.\n${ctx.creativeBrief.trim()}`
+      : "",
     ctx.images.length
       ? `Images you may use (exact addresses only; assets/ paths are bundled with the site). Images credited as AI-generated illustrations must never be presented as photos of this business, its premises, staff or work:\n${ctx.images.map((i) => `- ${i.url} | alt: ${i.alt}${i.credit ? ` | credit: ${i.credit}` : ""}`).join("\n")}`
       : "No photographs are available: design with colour, type, CSS shapes and inline SVG.",

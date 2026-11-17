@@ -6,7 +6,9 @@ import path from "node:path";
 
 const FONTS = ["Inter", "DM Sans", "Manrope", "Outfit", "Plus Jakarta Sans", "Work Sans", "Source Sans 3", "Nunito Sans",
   "Playfair Display", "Fraunces", "Cormorant Garamond", "Libre Baskerville", "Lora", "DM Serif Display",
-  "Space Grotesk", "Sora", "Archivo", "Barlow", "Oswald", "Bebas Neue", "Poppins", "Montserrat", "Raleway"];
+  "Space Grotesk", "Sora", "Archivo", "Barlow", "Oswald", "Bebas Neue", "Poppins", "Montserrat", "Raleway",
+  // Expressive display and accent faces for bolder, editorial concepts.
+  "Anton", "Archivo Black", "Big Shoulders Display", "Syne", "Unbounded", "Space Mono", "Instrument Serif", "Dela Gothic One"];
 const SUBSETS = ["latin", "latin-ext"];
 const WANT = [400, 600, 700];
 const OUT = path.resolve("data/fonts");

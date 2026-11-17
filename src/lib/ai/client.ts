@@ -115,6 +115,7 @@ export async function runAgent<S extends z.ZodType>(opts: RunAgentOptions<S>): P
     organisation_id: opts.organisationId,
     provider: "anthropic",
     operation: opts.agent,
+    model: response.model,
     input_units: inputTokens,
     output_units: usage.output_tokens ?? 0,
     cost_usd: costUsd,
@@ -224,7 +225,7 @@ export async function runWebSearch(opts: {
     searches += turnSearches;
     costUsd += turnCost;
     await opts.db.from("api_usage").insert({
-      organisation_id: opts.organisationId, provider: "anthropic", operation: opts.agent,
+      organisation_id: opts.organisationId, provider: "anthropic", operation: opts.agent, model: response.model,
       input_units: inputTokens, output_units: usage.output_tokens ?? 0, cost_usd: turnCost,
     });
 
@@ -294,7 +295,7 @@ export async function runToolTurn(opts: {
   const costUsd =
     ((usage.input_tokens ?? 0) * price.in + (usage.cache_creation_input_tokens ?? 0) * price.in * 1.25 + (usage.cache_read_input_tokens ?? 0) * price.in * 0.1 + (usage.output_tokens ?? 0) * price.out) / 1_000_000;
   await opts.db.from("api_usage").insert({
-    organisation_id: opts.organisationId, provider: "anthropic", operation: opts.agent,
+    organisation_id: opts.organisationId, provider: "anthropic", operation: opts.agent, model: message.model,
     input_units: inputTokens, output_units: usage.output_tokens ?? 0, cost_usd: costUsd,
   });
   if (message.stop_reason === "refusal") throw new AgentRefusalError(`${opts.agent} declined the request.`);

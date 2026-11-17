@@ -32,11 +32,12 @@ const appCsp = [
 const nextConfig: NextConfig = {
   cacheComponents: false,
   poweredByHeader: false,
-  serverExternalPackages: ["playwright", "undici", "sharp"],
+  serverExternalPackages: ["playwright", "playwright-core", "@sparticuz/chromium", "undici", "sharp"],
   // GeoNames town data is read from disk by these routes.
   outputFileTracingIncludes: {
     // Self-hosted fonts are read from disk whenever a prototype version is saved.
-    "/**": ["./data/fonts/**/*"],
+    // The builder screenshots its drafts with a serverless Chromium (compressed browser files).
+    "/**": ["./data/fonts/**/*", "./node_modules/@sparticuz/chromium/bin/**"],
     "/api/places/**": ["./data/geonames/**"],
     "/opportunities": ["./data/geonames/**"],
   },

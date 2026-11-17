@@ -143,40 +143,86 @@ describe("a scripted build, turn by turn", () => {
   const reply = (blocks: Block[], stop: "tool_use" | "end_turn" | "max_tokens" = "tool_use") => ({ content: blocks as never, stop_reason: stop });
   const use = (id: string, name: string, input: Record<string, unknown> = {}): Block => ({ type: "tool_use", id, name, input });
 
-  it("writes files, checks, fixes, and finishes with results paired to every call", () => {
+  it("writes files, checks, fixes, and finishes with results paired to every call", async () => {
     const check = makeChecker(CTX, SPEC);
     const state: DraftState = { source: {}, lastCheck: null, dirtySinceCheck: true, finished: null };
     const messages: Parameters<typeof applyTurn>[1] = [{ role: "user", content: "Build it." }];
 
     // Turn 1: two files in parallel plus a premature finish.
     const broken = GOOD["index.html"].replace("Small plates", "Award-winning small plates");
-    let log = applyTurn(state, messages, reply([use("a", "write_file", { path: "index.html", content: broken }), use("b", "write_file", { path: "contact.html", content: GOOD["contact.html"] }), use("c", "finish", { summary: "x", suggestions: [] })]), check);
+    let log = await applyTurn(state, messages, reply([use("a", "write_file", { path: "index.html", content: broken }), use("b", "write_file", { path: "contact.html", content: GOOD["contact.html"] }), use("c", "finish", { summary: "x", suggestions: [] })]), check);
     expect(log).toEqual(["Wrote index.html", "Wrote contact.html", "Run check_site first."]);
     const results = messages.at(-1)!.content as { tool_use_id: string; is_error?: boolean }[];
     expect(results.map((r) => r.tool_use_id)).toEqual(["a", "b", "c"]);
     expect(results[2].is_error).toBe(true);
 
     // Turn 2: stylesheet, script and a check that catches the award claim.
-    applyTurn(state, messages, reply([use("d", "write_file", { path: "styles.css", content: GOOD["styles.css"] }), use("e", "write_file", { path: "script.js", content: GOOD["script.js"] }), use("f", "check_site")]), check);
+    await applyTurn(state, messages, reply([use("d", "write_file", { path: "styles.css", content: GOOD["styles.css"] }), use("e", "write_file", { path: "script.js", content: GOOD["script.js"] }), use("f", "check_site")]), check);
     expect(String((messages.at(-1)!.content as { content: string }[])[2].content)).toMatch(/award/);
 
     // Turn 3: the model stops talking without a tool: it gets nudged.
-    applyTurn(state, messages, reply([{ type: "text", text: "I will fix that." }], "end_turn"), check);
+    await applyTurn(state, messages, reply([{ type: "text", text: "I will fix that." }], "end_turn"), check);
     expect(messages.at(-1)!.content).toBe(NUDGE);
 
     // Turn 4: fix, check, finish in one reply.
-    log = applyTurn(state, messages, reply([use("g", "write_file", { path: "index.html", content: GOOD["index.html"] }), use("h", "check_site"), use("i", "finish", { summary: "Calm bistro concept.", suggestions: ["Add the menu"] })]), check);
+    log = await applyTurn(state, messages, reply([use("g", "write_file", { path: "index.html", content: GOOD["index.html"] }), use("h", "check_site"), use("i", "finish", { summary: "Calm bistro concept.", suggestions: ["Add the menu"] })]), check);
     expect(log).toEqual(["Updated index.html", "Checks passed", "Finished"]);
     expect(state.finished).toEqual({ summary: "Calm bistro concept.", suggestions: ["Add the menu"] });
     // Strict alternation: user, assistant, user, assistant…
     expect(messages.map((m) => m.role).join(",")).toBe("user,assistant,user,assistant,user,assistant,user,assistant,user");
   });
 
-  it("asks for smaller writes when a reply was cut off", () => {
+  it("asks for smaller writes when a reply was cut off", async () => {
     const state: DraftState = { source: {}, lastCheck: null, dirtySinceCheck: true, finished: null };
     const messages: Parameters<typeof applyTurn>[1] = [{ role: "user", content: "Build it." }];
-    applyTurn(state, messages, reply([{ type: "text", text: "<!doctype html>…" }], "max_tokens"), makeChecker(CTX, SPEC));
+    await applyTurn(state, messages, reply([{ type: "text", text: "<!doctype html>…" }], "max_tokens"), makeChecker(CTX, SPEC));
     expect(String(messages.at(-1)!.content)).toMatch(/cut off/);
+  });
+});
+
+describe("looking at the draft (view_page)", () => {
+  type Block = { type: "tool_use"; id: string; name: string; input: Record<string, unknown> } | { type: "text"; text: string };
+  const reply = (blocks: Block[]) => ({ content: blocks as never, stop_reason: "tool_use" as const });
+  const use = (id: string, name: string, input: Record<string, unknown> = {}): Block => ({ type: "tool_use", id, name, input });
+  const fakeView = async (path: string, device: "desktop" | "phone") => ({ jpegBase64: Buffer.from(`${path}-${device}`).toString("base64"), note: `${path} on ${device}` });
+
+  it("returns a screenshot and requires looking at the home page on both devices before finishing", async () => {
+    const check = makeChecker(CTX, SPEC);
+    const state: DraftState = { source: { ...GOOD }, lastCheck: null, dirtySinceCheck: true, finished: null, canView: true };
+    const messages: Parameters<typeof applyTurn>[1] = [{ role: "user", content: "Build it." }];
+    let log = await applyTurn(state, messages, reply([use("a", "check_site"), use("b", "finish", { summary: "x", suggestions: [] })]), check, fakeView);
+    expect(log[1]).toMatch(/view_page on desktop and on phone/);
+    log = await applyTurn(state, messages, reply([use("c", "view_page", { path: "index.html", device: "desktop" }), use("d", "view_page", { path: "missing.html", device: "phone" })]), check, fakeView);
+    expect(log).toEqual(["Looked at index.html on desktop", "There is no page missing.html."]);
+    const results = messages.at(-1)!.content as { content: { type: string }[] | string; is_error?: boolean }[];
+    expect((results[0].content as { type: string }[]).map((c) => c.type)).toEqual(["image", "text"]);
+    expect(results[1].is_error).toBe(true);
+    await applyTurn(state, messages, reply([use("e", "view_page", { path: "index.html", device: "phone" })]), check, fakeView);
+    log = await applyTurn(state, messages, reply([use("f", "finish", { summary: "Done.", suggestions: [] })]), check, fakeView);
+    expect(log).toEqual(["Finished"]);
+  });
+
+  it("keeps only the newest two screenshots in the conversation", async () => {
+    const check = makeChecker(CTX, SPEC);
+    const state: DraftState = { source: { ...GOOD }, lastCheck: null, dirtySinceCheck: true, finished: null, canView: true };
+    const messages: Parameters<typeof applyTurn>[1] = [{ role: "user", content: "Build it." }];
+    for (const [i, d] of (["desktop", "phone", "desktop"] as const).entries()) {
+      await applyTurn(state, messages, reply([use(`v${i}`, "view_page", { path: i === 2 ? "contact.html" : "index.html", device: d })]), check, fakeView);
+    }
+    const images = JSON.stringify(messages).match(/"type":"image"/g) ?? [];
+    expect(images.length).toBe(2);
+    expect(JSON.stringify(messages)).toMatch(/Earlier screenshot removed/);
+  });
+
+  it("carries on without screenshots when rendering is unavailable", async () => {
+    const check = makeChecker(CTX, SPEC);
+    const state: DraftState = { source: { ...GOOD }, lastCheck: null, dirtySinceCheck: true, finished: null, canView: true };
+    const messages: Parameters<typeof applyTurn>[1] = [{ role: "user", content: "Build it." }];
+    const noBrowser = async () => ({ note: "", error: "Page rendering is not available here (no browser). Continue without it." });
+    await applyTurn(state, messages, reply([use("a", "view_page", { path: "index.html", device: "desktop" })]), check, noBrowser);
+    expect(state.canView).toBe(false);
+    const log = await applyTurn(state, messages, reply([use("b", "check_site"), use("c", "finish", { summary: "x", suggestions: [] })]), check, noBrowser);
+    expect(log).toEqual(["Checks passed", "Finished"]);
   });
 });
 
