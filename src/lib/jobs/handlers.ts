@@ -119,7 +119,16 @@ export async function handleJob(db: SupabaseClient, job: JobRow): Promise<Record
         }
         buildId = (await startBuild(db, org, String(p.businessId), actorId, { runId: job.run_id, queue: false })).buildId;
       }
-      const r = await runBuildSlice(db, buildId, { deadlineMs: 45_000, runId: job.run_id });
+      let r: Awaited<ReturnType<typeof runBuildSlice>>;
+      try {
+        r = await runBuildSlice(db, buildId, { deadlineMs: 45_000, runId: job.run_id });
+      } catch (e) {
+        // Last attempt: don't leave the build looking busy forever (it would block new builds).
+        if (job.attempts >= job.max_attempts) {
+          await db.from("site_builds").update({ status: "failed", error: `Could not save the build: ${(e as Error).message}`, finished_at: new Date().toISOString() }).eq("id", buildId).eq("organisation_id", org).in("status", ["queued", "running"]);
+        }
+        throw e;
+      }
       if (r.status === "continue") {
         // More turns needed: queue the next slice (keeps each request inside serverless limits).
         await enqueue(db, { organisationId: org, runId: job.run_id, type: "generate", payload: { buildId, actorId }, idempotencyKey: `build:${buildId}:${Date.now()}` });

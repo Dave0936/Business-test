@@ -39,6 +39,9 @@ interface BuildRow {
   last_check: { outcome: CheckOutcome; dirty: boolean } | null;
   cost_usd: number;
   created_by: string | null;
+  /** Set when the builder called finish (saved before the version is saved). */
+  summary: string | null;
+  suggestions: string[] | null;
 }
 
 async function latestBrief(db: SupabaseClient, org: string, businessId: string, actorId: string | null) {
@@ -174,6 +177,11 @@ export async function runBuildSlice(db: SupabaseClient, buildId: string, opts: {
     if (e) throw e;
   };
   if (build.status === "queued") await db.from("site_builds").update({ status: "running" }).eq("id", buildId).eq("organisation_id", org);
+  // The builder already finished but saving failed (e.g. a timeout): save again, no new model turns.
+  if (build.summary != null) {
+    state.finished = { summary: build.summary, suggestions: build.suggestions ?? [] };
+    return finalise(db, build, ctx, state, activity);
+  }
 
   while (Date.now() < deadline) {
     const { data: flag } = await db.from("site_builds").select("stop_requested").eq("id", buildId).single();
