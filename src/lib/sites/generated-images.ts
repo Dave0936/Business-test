@@ -5,7 +5,7 @@ import { safeFetch } from "@/lib/security/safe-fetch";
 import { sniffImage } from "@/lib/design/image-sniff";
 import type { DesignBrief } from "@/lib/design/brief";
 import {
-  deleteRequest, estimateUsd, imagePrompt, requestBody, requestStatus, submitImage,
+  HiggsfieldError, deleteRequest, estimateUsd, imagePrompt, requestBody, requestStatus, submitImage,
   type AspectRatio, type HiggsfieldCreds,
 } from "@/lib/providers/images/higgsfield";
 import type { ResolvedImage } from "./spec";
@@ -76,7 +76,17 @@ export async function processImage(db: SupabaseClient, org: string, imageId: str
   const c = await creds(db, org);
 
   if (img.status === "queued") {
-    const { requestId } = await submitImage(c, requestBody(img.prompt, img.aspect as AspectRatio), img.id, f);
+    let requestId: string;
+    try {
+      ({ requestId } = await submitImage(c, requestBody(img.prompt, img.aspect as AspectRatio), img.id, f));
+    } catch (e) {
+      // Problems a retry cannot fix (no credit, bad key, model unavailable): stop and say why.
+      if (e instanceof HiggsfieldError && [401, 402, 403, 404, 422, 423].includes(e.status ?? 0)) {
+        await db.from("generated_images").update({ status: "failed", error: e.message }).eq("id", img.id).eq("organisation_id", org);
+        return "failed";
+      }
+      throw e;
+    }
     await db.from("generated_images").update({ status: "submitted", request_id: requestId }).eq("id", img.id).eq("organisation_id", org);
     return "poll";
   }

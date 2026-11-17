@@ -37,7 +37,7 @@ function headers(c: HiggsfieldCreds, extra: Record<string, string> = {}) {
 async function json<T>(res: Response, what: string): Promise<T> {
   const body = (await res.json().catch(() => ({}))) as T & { detail?: unknown; message?: string; error?: string };
   if (!res.ok) {
-    const msg = res.status === 401 ? "Higgsfield rejected the credentials." : res.status === 402 ? "Not enough Higgsfield credits." : res.status === 429 ? "Higgsfield rate limit reached; try again shortly." : [404, 423, 503].includes(res.status) ? "This Higgsfield model is not available to the account right now." : `Higgsfield ${what} failed (${res.status}).`;
+    const msg = res.status === 401 ? "Higgsfield rejected the credentials." : res.status === 402 || res.status === 403 ? "Not enough Higgsfield API credit. Add funds at console.higgsfield.ai, then try again (nothing was charged)." : res.status === 429 ? "Higgsfield rate limit reached; try again shortly." : [404, 423, 503].includes(res.status) ? "This Higgsfield model is not available to the account right now." : `Higgsfield ${what} failed (${res.status}).`;
     throw new HiggsfieldError(msg, res.status);
   }
   return body;

@@ -48,7 +48,8 @@ describe("Higgsfield image provider", () => {
 
   it("explains account problems plainly", async () => {
     await expect(estimateUsd(C, requestBody("x"), asFetch(vi.fn().mockResolvedValue(json({}, 401))))).rejects.toThrow(/rejected the credentials/);
-    await expect(estimateUsd(C, requestBody("x"), asFetch(vi.fn().mockResolvedValue(json({}, 402))))).rejects.toThrow(/Not enough Higgsfield credits/);
+    await expect(estimateUsd(C, requestBody("x"), asFetch(vi.fn().mockResolvedValue(json({}, 402))))).rejects.toThrow(/Not enough Higgsfield API credit/);
+    await expect(submitImage(C, requestBody("x"), "k", asFetch(vi.fn().mockResolvedValue(json({ detail: "Insufficient balance" }, 403))))).rejects.toThrow(/Not enough Higgsfield API credit.*nothing was charged/);
     await expect(submitImage(C, requestBody("x"), "k", asFetch(vi.fn().mockResolvedValue(json({}, 423))))).rejects.toThrow(/not available to the account/);
   });
 
