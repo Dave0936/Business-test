@@ -299,6 +299,22 @@ token; it also runs the retention sweep) and whenever someone has the app open. 
 hidden by row-level security; the bin page asks for them with the `x-include-binned` header.
 `bin_business()`, `purge_business()` and `cancel_run()` do the privileged parts with role checks.
 
+`tests/e2e/phase10.mjs` (owner account) checks the analytics page and its CSV exports, the app's
+security headers and Content Security Policy (site previews keep their own sandboxing policy),
+and that no page breaks under the policy. Phase 3's script talks to Supabase directly from Node:
+behind a proxy run it with `NODE_USE_ENV_PROXY=1`.
+
+Before going live, also turn on Supabase Auth's leaked password protection (Authentication ›
+Attack Protection).
+
+### Design quality
+
+The builder (`src/lib/sites/bespoke/`) follows a written design standard (`prompt.ts`), the
+agency's house style (Settings) and each site's creative brief (Design studio), sees uploaded
+reference pictures, and looks at its own pages with `view_page` (headless Chromium; on Vercel
+`@sparticuz/chromium`) before it may finish. Every Claude call records the model that answered
+(`api_usage.model`).
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -312,7 +328,7 @@ hidden by row-level security; the bin page asks for them with the `x-include-bin
 | 7 | Cloudflare deployment: one Worker per approved concept on workers.dev, live check of the exact version, take offline, history | **Complete and tested** (real uploads need a Cloudflare token) |
 | 8 | Email drafting (Claude, observed facts only), compliance checks, approval, sending through Resend, one-click unsubscribe, bounce and complaint suppression, legitimate interests assessment | **Complete and tested** (real sending needs Resend) |
 | 9 | Automation Centre (repeating searches, pause all, runs, spend, problems, activity), daily cron, recycle bin with 30-day permanent deletion | **Complete and tested** |
-| 10 | Analytics, security hardening, production testing | Not started |
+| 10 | Analytics (pipeline, breakdowns, email, value, costs, CSV), Content Security Policy, Supabase advisor fixes, dependency audit, full regression run | **Complete and tested** |
 
 "Drafted" means code exists in `src/lib`, but the phase is not complete until it has been tested
 and its UI finished.
