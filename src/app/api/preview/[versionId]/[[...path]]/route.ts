@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createUserClient } from "@/lib/supabase/server";
 import type { SiteFiles } from "@/lib/sites/spec";
+import { inlinePageAssets, inlinePreviewCsp } from "@/lib/sites/preview-inline";
 
 /**
  * Serves a prototype version to signed-in members of its organisation (RLS).
@@ -49,11 +50,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ vers
   if (f === undefined) return new NextResponse("Not found", { status: 404 });
 
   const ext = key.split(".").pop() ?? "";
-  const body = typeof f === "string" ? f : Buffer.from(f.base64, "base64");
+  const origin = new URL(req.url).origin;
+  // Pages carry their own stylesheet, script and fonts inline, so the sandboxed frame has
+  // nothing to fetch for them whatever the browser's rules for opaque origins.
+  const inlined = ext === "html" && typeof f === "string" ? inlinePageAssets(key, files) : null;
+  const body = inlined ? inlined.html : typeof f === "string" ? f : Buffer.from(f.base64, "base64");
   return new NextResponse(body, {
     headers: {
       "content-type": typeof f === "string" ? TYPES[ext] ?? "application/octet-stream" : f.contentType,
-      "content-security-policy": previewCsp(new URL(req.url).origin),
+      "content-security-policy": inlined ? inlinePreviewCsp(origin, inlined.scriptHashes) : previewCsp(origin),
       "x-robots-tag": "noindex",
       "cache-control": "private, max-age=0, no-store",
       "x-content-type-options": "nosniff",
