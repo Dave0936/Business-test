@@ -9,6 +9,7 @@ import {
   type AspectRatio, type HiggsfieldCreds,
 } from "@/lib/providers/images/higgsfield";
 import type { ResolvedImage } from "./spec";
+import { compressPhoto } from "./image-compress";
 
 export const MAX_IMAGES = 6;
 const BUCKET = "site-assets";
@@ -104,8 +105,11 @@ export async function processImage(db: SupabaseClient, org: string, imageId: str
     await db.from("generated_images").update({ status: "failed", error: "The finished image could not be downloaded." }).eq("id", img.id).eq("organisation_id", org);
     return "failed";
   }
-  const path = `${org}/generated/${img.business_id}/${img.id}.${kind.ext}`;
-  const { error: upErr } = await db.storage.from(BUCKET).upload(path, res.bytesBody, { contentType: kind.mime, upsert: true });
+  // Higgsfield returns large PNGs (about 1.5 MB); store a web-sized WebP copy instead.
+  const small = await compressPhoto(res.bytesBody, kind.mime);
+  const ext = small.contentType === "image/webp" ? "webp" : kind.ext;
+  const path = `${org}/generated/${img.business_id}/${img.id}.${ext}`;
+  const { error: upErr } = await db.storage.from(BUCKET).upload(path, small.bytes, { contentType: small.contentType, upsert: true });
   if (upErr) throw new Error(`Could not store the image: ${upErr.message}`);
   await db.from("generated_images").update({ status: "completed", storage_path: path, error: null }).eq("id", img.id).eq("organisation_id", org);
   await db.from("api_usage").insert({ organisation_id: org, provider: "higgsfield", operation: "image_generation", input_units: 1, output_units: 1, cost_usd: Number(img.quoted_usd ?? 0) });

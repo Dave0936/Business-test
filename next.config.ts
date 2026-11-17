@@ -13,7 +13,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   cacheComponents: false,
   poweredByHeader: false,
-  serverExternalPackages: ["playwright", "undici"],
+  serverExternalPackages: ["playwright", "undici", "sharp"],
   // GeoNames town data is read from disk by these routes.
   outputFileTracingIncludes: {
     // Self-hosted fonts are read from disk whenever a prototype version is saved.

@@ -11,6 +11,7 @@ import { browserQa } from "@/lib/qa/browser";
 import { demoContent } from "./demo-content";
 import { withSelfHostedFonts } from "./fonts-server";
 import { generatedImagesFor } from "./generated-images";
+import { compressPhoto } from "./image-compress";
 import { imageQueries, renderSite } from "./render";
 import { unsplashSearch } from "./images";
 import type { ResolvedImage, SiteFiles, SiteSpec, Theme } from "./spec";
@@ -80,7 +81,9 @@ async function withUploads(db: SupabaseClient, spec: SiteSpec, files: SiteFiles)
     if (!img.storagePath) continue;
     const { data, error } = await db.storage.from(SITE_ASSETS_BUCKET).download(img.storagePath);
     if (error || !data) continue; // QA will report the missing asset
-    files[img.src] = { base64: Buffer.from(await data.arrayBuffer()).toString("base64"), contentType: data.type || "image/jpeg" };
+    // Photos travel inside every version, so large ones are compressed (WebP, max 1600 px).
+    const small = await compressPhoto(new Uint8Array(await data.arrayBuffer()), data.type || "image/jpeg");
+    files[img.src] = { base64: Buffer.from(small.bytes).toString("base64"), contentType: small.contentType };
   }
   return files;
 }
