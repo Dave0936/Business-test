@@ -6,7 +6,7 @@ design direction, builds an original website concept, and helps you contact the 
 **Every deployment and every prospecting email needs a person's approval. The database enforces this.**
 
 Stack: Next.js 16 (App Router, TypeScript) · Tailwind CSS 4 · shadcn/ui conventions (Radix) ·
-Supabase (Postgres, Auth, Storage, row-level security) · Anthropic Claude · Cloudflare Pages ·
+Supabase (Postgres, Auth, Storage, row-level security) · Anthropic Claude · Cloudflare Workers (static assets) ·
 Resend.
 
 ---
@@ -101,7 +101,7 @@ the server can reach Supabase.
 | `OSM_CONTACT_EMAIL` | OpenStreetMap usage policy (User-Agent contact) | No |
 | `PINTEREST_ACCESS_TOKEN` | Pinterest references (needs approved API access) | No |
 | `UNSPLASH_ACCESS_KEY` | Licensed photos in prototypes | No |
-| `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Deploying approved prototypes (token needs *Cloudflare Pages: Edit*) | No |
+| `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Deploying approved prototypes (token needs *Account › Workers Scripts › Edit*; the account needs a workers.dev subdomain). Organisations can also connect their own under Integrations. Deploying also needs `SUPABASE_SERVICE_ROLE_KEY`. | No |
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_WEBHOOK_SECRET` | Sending approved emails, delivery events (verified domain required) | No |
 
 Without an optional credential, that feature shows as **Not connected** or **Demo mode** on the
@@ -274,6 +274,14 @@ checklist item, and the history records each decision against its version. Appro
 only by `decide_approval()`, which checks the role, the reviewed version, the checklist
 (`website_review_items()`) and the reason in the database.
 
+`tests/e2e/phase7.mjs` (owner and staff accounts, run after phase 6) checks the deployments page
+in a workspace without Cloudflare: approved sites are listed, Deploy stays disabled, staff cannot
+deploy. Each approved concept is published as its own Cloudflare Worker using the documented
+Direct Upload API for Workers static assets (`src/lib/deploy/cloudflare.ts`, unit-tested against
+a stand-in API). A deployment is recorded as live only after Cloudflare accepts every step and
+the workers.dev address serves the approved version's marker. "Take offline" deletes the Worker
+and keeps the approval and history.
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -284,7 +292,7 @@ only by `decide_approval()`, which checks the role, the reviewed version, the ch
 | 4 | Design studio: Pinterest boards, references, picks, questions, editable brief | **Complete and tested** |
 | 5 | Bespoke website builder, preview, revisions, versions, self-hosted fonts, Higgsfield photos, extra languages | **Complete and tested** (real Claude and Higgsfield runs need their keys) |
 | 6 | Quality assurance and approval centre: review queue, checklist, decisions with reasons, history, re-run checks | **Complete and tested** |
-| 7 | Cloudflare deployment | Service drafted, untested |
+| 7 | Cloudflare deployment: one Worker per approved concept on workers.dev, live check of the exact version, take offline, history | **Complete and tested** (real uploads need a Cloudflare token) |
 | 8 | Email generation, approval and sending | Service drafted, untested |
 | 9 | Automation engine | Queue and worker drafted |
 | 10 | Analytics, security hardening, production testing | Not started |

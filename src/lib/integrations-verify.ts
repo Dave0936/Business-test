@@ -12,7 +12,7 @@ const FIELDS: Record<string, { name: string; label: string; secret: boolean; pla
   higgsfield: [{ name: "keyId", label: "API key ID", secret: false }, { name: "keySecret", label: "API key secret", secret: true }],
   pinterest: [{ name: "accessToken", label: "Access token", secret: true }],
   unsplash: [{ name: "accessKey", label: "Access key", secret: true }],
-  cloudflare: [{ name: "accountId", label: "Account ID", secret: false }, { name: "apiToken", label: "API token (Cloudflare Pages: Edit)", secret: true }],
+  cloudflare: [{ name: "accountId", label: "Account ID", secret: false }, { name: "apiToken", label: "API token (Account › Workers Scripts › Edit)", secret: true }],
   resend: [{ name: "apiKey", label: "API key", secret: true }, { name: "fromEmail", label: "From address (verified domain)", secret: false, placeholder: "hello@youragency.com" }],
 };
 
@@ -62,11 +62,22 @@ export async function verifyCredential(provider: string, c: Record<string, strin
         return r.ok ? { ok: true, detail: "Unsplash key works." } : { ok: false, detail: `Unsplash answered ${r.status}` };
       }
       case "cloudflare": {
-        const r = await get("https://api.cloudflare.com/client/v4/user/tokens/verify", { authorization: `Bearer ${c.apiToken}` });
-        const j = (await r.json().catch(() => ({}))) as { success?: boolean; result?: { status?: string } };
-        if (!j.success || j.result?.status !== "active") return { ok: false, detail: "Cloudflare did not accept this token." };
-        const a = await get(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(c.accountId)}/pages/projects?per_page=1`, { authorization: `Bearer ${c.apiToken}` });
-        return a.ok ? { ok: true, detail: "Token is active and can use Cloudflare Pages.", config: { accountId: c.accountId } } : { ok: false, detail: "Token works but cannot read Pages for that account ID." };
+        const auth = { authorization: `Bearer ${c.apiToken}` };
+        const acct = encodeURIComponent(c.accountId);
+        // User tokens and account-owned tokens are verified at different addresses.
+        let v = await get("https://api.cloudflare.com/client/v4/user/tokens/verify", auth);
+        let j = (await v.json().catch(() => ({}))) as { success?: boolean; result?: { status?: string } };
+        if (!j.success) {
+          v = await get(`https://api.cloudflare.com/client/v4/accounts/${acct}/tokens/verify`, auth);
+          j = (await v.json().catch(() => ({}))) as typeof j;
+        }
+        if (!j.success || j.result?.status !== "active") return { ok: false, detail: "Cloudflare did not accept this token for that account ID." };
+        const a = await get(`https://api.cloudflare.com/client/v4/accounts/${acct}/workers/subdomain`, auth);
+        const aj = (await a.json().catch(() => ({}))) as { result?: { subdomain?: string } };
+        if (a.status === 403 || a.status === 401) return { ok: false, detail: "The token works but can't use Workers. Give it the permission Account › Workers Scripts › Edit." };
+        if (a.ok && aj.result?.subdomain) return { ok: true, detail: `Token works. Concepts will be published at <name>.${aj.result.subdomain}.workers.dev.`, config: { accountId: c.accountId, subdomain: aj.result.subdomain } };
+        if (a.status === 404 || (a.ok && !aj.result?.subdomain)) return { ok: true, detail: "Token works, but the account has no workers.dev subdomain yet. Open Workers & Pages in the Cloudflare dashboard once to choose one before deploying.", config: { accountId: c.accountId } };
+        return { ok: false, detail: `Cloudflare answered ${a.status} when checking Workers for that account ID.` };
       }
       case "resend": {
         if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c.fromEmail ?? "")) return { ok: false, detail: "Enter the from address." };

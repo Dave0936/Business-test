@@ -166,6 +166,22 @@ insert into public.deployment_records (organisation_id, business_id, website_id,
 values (:'org_a', :'biz', :'site', :'v1', :'site_approval', 'wo-harbour-cafe', 'verified');
 update public.generated_websites set status = 'deployed' where id = :'site';
 
+-- Taking a site offline: only the service records it; the approved site goes back to "approved".
+reset role;
+set role authenticated;
+set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated"}';
+update public.deployment_records set status = 'removed' where website_id = :'site';  -- no rows: members cannot write records
+reset role;
+select pg_temp.assert((select status::text from public.deployment_records where website_id = :'site') = 'verified', 'members cannot take a deployment offline directly');
+set role service_role;
+set request.jwt.claims = '{"role":"service_role"}';
+update public.deployment_records set status = 'removed', removed_at = now() where website_id = :'site';
+update public.generated_websites set status = 'approved' where id = :'site';
+select pg_temp.assert((select status::text from public.generated_websites where id = :'site') = 'approved', 'offline site is approved again');
+-- Deploying again reuses the approval's record.
+update public.deployment_records set status = 'verified', removed_at = null where website_id = :'site';
+update public.generated_websites set status = 'deployed' where id = :'site';
+
 -- A new version resets status and an old approval cannot deploy it
 insert into public.website_versions (organisation_id, website_id, version, spec, files, content_hash) values (:'org_a', :'site', 2, '{"a":2}', '{}', 'x') returning id as v2 \gset
 update public.generated_websites set current_version_id = :'v2' where id = :'site';

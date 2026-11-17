@@ -60,10 +60,14 @@ try {
   // Fictional [Demo] businesses: their template rebuilds may go back to approval without Claude.
   // Top up the queue by rebuilding [Demo] sites that need work (earlier runs decide on two).
   const demoQueued = async () => owner.locator('[data-testid="queue"] li', { hasText: "[Demo]" }).count();
-  for (let round = 0; round < 3 && (await demoQueued()) < 2; round++) {
-    const work = await owner.locator('[data-testid="needs-work"] li', { hasText: "[Demo]" }).locator("a").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+  for (let round = 0; round < 3; round++) {
+    await owner.goto(`${BASE}/approvals`);
+    if ((await demoQueued()) >= 2) break;
+    // Any [Demo] site not already waiting (needs work, approved or deployed) can be rebuilt.
+    await owner.goto(`${BASE}/builder`);
+    const work = await owner.locator("main a", { hasText: "[Demo]" }).filter({ hasNotText: "Awaiting approval" }).evaluateAll((as) => as.map((a) => a.getAttribute("href")));
     if (!work.length) break;
-    const id = work[0].split("/").pop();
+    const id = work[round % work.length].split("/").pop();
     await owner.goto(`${BASE}/builder/${id}`);
     owner.once("dialog", (d) => d.accept());
     await owner.locator("form").filter({ has: owner.getByRole("button", { name: "Build again from the brief" }) }).locator("button[type=submit]").click();

@@ -18,7 +18,7 @@ import { ReviewForm } from "./review-form";
 
 export const metadata: Metadata = { title: "Review prototype" };
 // Re-running the checks starts a browser; allow time for it.
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const QA_TONE: Record<string, "success" | "destructive" | "warning" | "secondary"> = { pass: "success", fail: "destructive", warn: "warning", skipped: "secondary" };
 const DECISION_TONE: Record<Decision, "success" | "warning" | "destructive"> = { approved: "success", changes_requested: "warning", rejected: "destructive" };
@@ -55,6 +55,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ website
   const waiting = site.status === "awaiting_approval";
   const reason = notReadyReason({ status: site.status, qaPassed: qa ? qa.passed : null, generatedBy: current?.generated_by ?? null, isDemoBusiness: biz.is_demo });
   const lastAsk = history?.find((h) => h.decision !== "approved" && h.comment);
+  const { data: liveRec } = await db.from("deployment_records").select("url, version_id").eq("website_id", websiteId).eq("status", "verified").order("created_at", { ascending: false }).limit(1).maybeSingle();
 
   return (
     <>
@@ -94,7 +95,12 @@ export default async function ReviewPage({ params }: { params: Promise<{ website
                 <Alert variant="info"><AlertDescription>Waiting for an owner or administrator to review it. Your role ({ctx.role.replace("_", " ")}) can view it but not decide.</AlertDescription></Alert>
               )
             ) : (
-              <Alert variant={site.status === "approved" || site.status === "deployed" ? "success" : "info"} data-testid="not-waiting"><AlertDescription>{reason}</AlertDescription></Alert>
+              <Alert variant={site.status === "approved" || site.status === "deployed" ? "success" : "info"} data-testid="not-waiting">
+                <AlertDescription className="space-y-2">
+                  <p>{site.status === "deployed" && liveRec?.url ? <>Live at <a href={liveRec.url} target="_blank" rel="noreferrer noopener" className="font-medium underline">{liveRec.url}</a>.</> : reason}</p>
+                  {(site.status === "approved" || site.status === "deployed") && <p><Link href="/deployments" className="text-sm font-medium underline">{site.status === "approved" ? "Deploy it from Deployments" : "Deployments"}</Link></p>}
+                </AlertDescription>
+              </Alert>
             )}
 
             <Card>

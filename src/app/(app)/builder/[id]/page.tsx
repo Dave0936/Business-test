@@ -92,6 +92,7 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
                 )}
                 <div className="flex flex-wrap gap-2">
                   <Link href={`/approvals/${id}`} className="font-medium text-primary hover:underline">{site.status === "awaiting_approval" ? "Review for approval" : "Approval details"}</Link>
+                  {(site.status === "approved" || site.status === "deployed") && <Link href="/deployments" className="font-medium text-primary hover:underline">{site.status === "deployed" ? "Live site" : "Deploy"}</Link>}
                   {editable && spec?.kind === "bespoke" && aiLive && !active && lastDecision?.decision === "changes_requested" && lastDecision.comment && site.status === "changes_requested" && (
                     <ActionButton action={reviseSiteAction} hidden={{ websiteId: id, instruction: lastDecision.comment }} label="Revise with this feedback" variant="outline" />
                   )}

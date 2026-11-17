@@ -1,13 +1,20 @@
 import "server-only";
-import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { promisify } from "node:util";
+import { createHash } from "node:crypto";
 import type { SiteFiles } from "@/lib/sites/spec";
 
-const run = promisify(execFile);
+/**
+ * Hosting for approved concepts: one Cloudflare Worker per website, serving the site's files as
+ * static assets on the account's workers.dev subdomain. Uses Cloudflare's documented Direct
+ * Upload API for Workers static assets (https://developers.cloudflare.com/workers/static-assets/direct-upload/),
+ * so it runs anywhere (no Wrangler or file system needed).
+ *
+ * The Worker's only code adds the site's security headers (from its _headers file) to each
+ * response. Nothing in the generated site runs on our servers.
+ */
+
 const API = "https://api.cloudflare.com/client/v4";
+export const COMPATIBILITY_DATE = "2026-11-01";
+const MAX_ASSET_BYTES = 25 * 1024 * 1024;
 
 export interface CloudflareCreds {
   apiToken: string;
@@ -20,115 +27,183 @@ interface CfEnvelope<T> {
   result: T;
 }
 
-async function cf<T>(creds: CloudflareCreds, method: string, p: string, body?: unknown): Promise<{ status: number; json: CfEnvelope<T> }> {
-  const res = await fetch(`${API}/accounts/${creds.accountId}${p}`, {
-    method,
-    headers: { authorization: `Bearer ${creds.apiToken}`, "content-type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const json = (await res.json().catch(() => ({ success: false, errors: [{ code: res.status, message: res.statusText }], result: null }))) as CfEnvelope<T>;
-  return { status: res.status, json };
-}
-
-/** Pages project names: lowercase letters, digits and dashes, max 58 chars. */
-export function projectNameFor(prefix: string, slug: string): string {
-  return `${prefix}-${slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 58);
-}
-
-export async function ensureProject(creds: CloudflareCreds, name: string): Promise<{ created: boolean; subdomain: string }> {
-  const got = await cf<{ subdomain: string }>(creds, "GET", `/pages/projects/${name}`);
-  if (got.status === 200 && got.json.success) return { created: false, subdomain: got.json.result.subdomain };
-  if (got.status !== 404) throw new Error(`Cloudflare: could not read project (${got.json.errors?.[0]?.message ?? got.status})`);
-  const made = await cf<{ subdomain: string }>(creds, "POST", "/pages/projects", { name, production_branch: "main" });
-  if (!made.json.success) throw new Error(`Cloudflare: could not create project (${made.json.errors?.[0]?.message ?? made.status})`);
-  return { created: true, subdomain: made.json.result.subdomain };
-}
-
-/**
- * Writes the approved files to an isolated temp directory and uploads them with
- * `wrangler pages deploy` (Cloudflare Direct Upload). The site is static: nothing
- * in it is executed on our servers.
- */
-export async function uploadWithWrangler(creds: CloudflareCreds, projectName: string, files: SiteFiles, commitMessage: string): Promise<{ deploymentId: string | null; url: string | null; log: string }> {
-  const dir = await mkdtemp(path.join(tmpdir(), "wo-deploy-"));
-  try {
-    for (const [name, content] of Object.entries(files)) {
-      const safe = path.normalize(name).replace(/^(\.\.(\/|\\|$))+/, "");
-      if (safe.startsWith("..") || path.isAbsolute(safe)) throw new Error(`Refusing unsafe file path ${name}`);
-      const dest = path.join(dir, safe);
-      await mkdir(path.dirname(dest), { recursive: true });
-      await writeFile(dest, typeof content === "string" ? content : Buffer.from(content.base64, "base64"));
-    }
-    const wrangler = path.join(process.cwd(), "node_modules", ".bin", "wrangler");
-    const { stdout, stderr } = await run(
-      wrangler,
-      ["pages", "deploy", dir, "--project-name", projectName, "--branch", "main", "--commit-message", commitMessage.slice(0, 200), "--commit-dirty=true"],
-      {
-        timeout: 180_000,
-        maxBuffer: 5_000_000,
-        // Only what wrangler needs: no other secrets from our environment are passed.
-        env: {
-          PATH: process.env.PATH ?? "",
-          HOME: dir,
-          CLOUDFLARE_API_TOKEN: creds.apiToken,
-          CLOUDFLARE_ACCOUNT_ID: creds.accountId,
-          WRANGLER_SEND_METRICS: "false",
-          CI: "true",
-          NODE_ENV: "production",
-          ...(process.env.HTTPS_PROXY ? { HTTPS_PROXY: process.env.HTTPS_PROXY } : {}),
-          ...(process.env.NODE_EXTRA_CA_CERTS ? { NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS } : {}),
-        },
-      },
-    );
-    const log = `${stdout}\n${stderr}`;
-    const url = log.match(/https:\/\/[a-z0-9-]+\.[a-z0-9-]+\.pages\.dev/i)?.[0] ?? null;
-    return { deploymentId: null, url, log: log.slice(-4000) };
-  } finally {
-    await rm(dir, { recursive: true, force: true });
+export class CloudflareError extends Error {
+  constructor(message: string, readonly status: number, readonly code?: number) {
+    super(message);
   }
 }
 
-interface CfDeployment {
-  id: string;
+type Fetch = typeof fetch;
+
+async function cf<T>(creds: CloudflareCreds, method: string, p: string, init: { json?: unknown; form?: FormData; auth?: string } = {}, f: Fetch = fetch): Promise<T> {
+  const headers: Record<string, string> = { authorization: `Bearer ${init.auth ?? creds.apiToken}` };
+  if (init.json !== undefined) headers["content-type"] = "application/json";
+  const url = p.startsWith("/accounts/") ? `${API}${p}` : `${API}/accounts/${creds.accountId}${p}`;
+  const res = await f(url, { method, headers, body: init.form ?? (init.json !== undefined ? JSON.stringify(init.json) : undefined) });
+  const json = (await res.json().catch(() => null)) as CfEnvelope<T> | null;
+  if (!res.ok || !json?.success) {
+    const err = json?.errors?.[0];
+    throw new CloudflareError(`Cloudflare: ${err?.message ?? `HTTP ${res.status}`}`, res.status, err?.code);
+  }
+  return json.result;
+}
+
+/** Worker names: lowercase letters, digits and dashes, at most 63 characters. */
+export function workerNameFor(prefix: string, slug: string): string {
+  return `${prefix}-${slug}`.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 63).replace(/-$/, "");
+}
+
+/** Files Cloudflare serves as assets (configuration files such as _headers are not published). */
+export function assetEntries(files: SiteFiles): { path: string; bytes: Buffer; contentType: string }[] {
+  const out: { path: string; bytes: Buffer; contentType: string }[] = [];
+  for (const [name, content] of Object.entries(files)) {
+    if (name.startsWith("_") || name.includes("..") || name.startsWith("/")) continue;
+    const bytes = typeof content === "string" ? Buffer.from(content, "utf8") : Buffer.from(content.base64, "base64");
+    if (bytes.byteLength > MAX_ASSET_BYTES) throw new Error(`${name} is larger than Cloudflare's 25 MB limit per file.`);
+    out.push({ path: `/${name}`, bytes, contentType: typeof content === "string" ? textType(name) : content.contentType });
+  }
+  return out.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+function textType(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase();
+  return { html: "text/html; charset=utf-8", css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8", txt: "text/plain; charset=utf-8", svg: "image/svg+xml", json: "application/json", xml: "application/xml" }[ext ?? ""] ?? "application/octet-stream";
+}
+
+/** 32-hex-character content hash used by the asset manifest (includes the extension, as Wrangler does). */
+export function assetHash(bytes: Buffer, path: string): string {
+  const ext = path.includes(".") ? path.split(".").pop()! : "";
+  return createHash("sha256").update(bytes.toString("base64") + ext).digest("hex").slice(0, 32);
+}
+
+/** Headers for every response, from the site's Cloudflare-style _headers file ("/*" block only). */
+export function headersFromFile(file: string | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!file) return out;
+  let inAll = false;
+  for (const raw of file.split("\n")) {
+    if (!raw.trim()) continue;
+    if (!/^\s/.test(raw)) { inAll = raw.trim() === "/*"; continue; }
+    if (!inAll) continue;
+    const m = raw.trim().match(/^([A-Za-z0-9-]+):\s*(.+)$/);
+    if (m) out[m[1]] = m[2];
+  }
+  return out;
+}
+
+/** The Worker's code: serve the assets and add the site's headers. */
+export function workerScript(headers: Record<string, string>): string {
+  return `// Generated by WebOpportunity AI. Serves a static website concept.
+const HEADERS = ${JSON.stringify({ "X-Robots-Tag": "noindex, nofollow", ...headers })};
+export default {
+  async fetch(request, env) {
+    const res = await env.ASSETS.fetch(request);
+    const out = new Response(res.body, res);
+    for (const [k, v] of Object.entries(HEADERS)) out.headers.set(k, v);
+    return out;
+  },
+};
+`;
+}
+
+/** The account's workers.dev subdomain (sites are served at <worker>.<subdomain>.workers.dev). */
+export async function accountSubdomain(creds: CloudflareCreds, f: Fetch = fetch): Promise<string> {
+  try {
+    const r = await cf<{ subdomain: string }>(creds, "GET", "/workers/subdomain", {}, f);
+    if (!r.subdomain) throw new Error("none");
+    return r.subdomain;
+  } catch (e) {
+    if (e instanceof CloudflareError && e.status !== 404) throw e;
+    throw new Error("This Cloudflare account has no workers.dev subdomain yet. Open Workers & Pages in the Cloudflare dashboard once to choose one, then deploy again.");
+  }
+}
+
+export interface UploadResult {
+  workerName: string;
   url: string;
-  environment: string;
-  latest_stage: { name: string; status: string };
-  aliases: string[] | null;
-  created_on: string;
+  uploaded: number;
+  reused: number;
+  versionId: string | null;
 }
 
-/** Ask Cloudflare (not wrangler's console output) whether the deployment succeeded. */
-export async function latestDeployment(creds: CloudflareCreds, projectName: string): Promise<CfDeployment | null> {
-  const r = await cf<CfDeployment[]>(creds, "GET", `/pages/projects/${projectName}/deployments?per_page=1`);
-  if (!r.json.success) throw new Error(`Cloudflare: could not list deployments (${r.json.errors?.[0]?.message ?? r.status})`);
-  return r.json.result[0] ?? null;
-}
+/**
+ * Upload the files and publish them as the Worker's current version on workers.dev.
+ * Resolves only when Cloudflare has accepted every step.
+ */
+export async function deploySite(creds: CloudflareCreds, workerName: string, files: SiteFiles, f: Fetch = fetch): Promise<UploadResult> {
+  const subdomain = await accountSubdomain(creds, f);
+  const assets = assetEntries(files);
+  if (!assets.some((a) => a.path === "/index.html")) throw new Error("The site has no index.html.");
+  const manifest: Record<string, { hash: string; size: number }> = {};
+  const byHash = new Map<string, { bytes: Buffer; contentType: string }>();
+  for (const a of assets) {
+    const hash = assetHash(a.bytes, a.path);
+    manifest[a.path] = { hash, size: a.bytes.byteLength };
+    byHash.set(hash, a);
+  }
 
-export async function waitForDeployment(creds: CloudflareCreds, projectName: string, notBefore: Date, timeoutMs = 120_000): Promise<CfDeployment> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const d = await latestDeployment(creds, projectName);
-    if (d && new Date(d.created_on) >= new Date(notBefore.getTime() - 5000)) {
-      if (d.latest_stage.status === "success") return d;
-      if (d.latest_stage.status === "failure" || d.latest_stage.status === "canceled") throw new Error(`Cloudflare reports deployment ${d.id} ${d.latest_stage.status} at stage ${d.latest_stage.name}`);
+  // 1. Tell Cloudflare which files the version needs; it answers with the ones it doesn't have.
+  const session = await cf<{ jwt: string; buckets?: string[][] }>(creds, "POST", `/workers/scripts/${workerName}/assets-upload-session`, { json: { manifest } }, f);
+  let completion = session.jwt;
+  let uploaded = 0;
+
+  // 2. Upload the missing files, bucket by bucket. The last response carries the completion token.
+  for (const bucket of session.buckets ?? []) {
+    const form = new FormData();
+    for (const hash of bucket) {
+      const a = byHash.get(hash);
+      if (!a) throw new Error(`Cloudflare asked for a file we did not list (${hash}).`);
+      form.append(hash, new Blob([a.bytes.toString("base64")], { type: a.contentType }), hash);
+      uploaded++;
     }
-    if (Date.now() > deadline) throw new Error("Timed out waiting for Cloudflare to confirm the deployment");
-    await new Promise((r) => setTimeout(r, 4000));
+    const r = await cf<{ jwt?: string } | null>(creds, "POST", "/workers/assets/upload?base64=true", { form, auth: session.jwt }, f);
+    if (r?.jwt) completion = r.jwt;
+  }
+
+  // 3. Publish the Worker with those assets.
+  const metadata = {
+    main_module: "worker.js",
+    compatibility_date: COMPATIBILITY_DATE,
+    assets: { jwt: completion, config: { html_handling: "auto-trailing-slash", not_found_handling: "404-page" } },
+    bindings: [{ name: "ASSETS", type: "assets" }],
+  };
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
+  const headers = headersFromFile(typeof files["_headers"] === "string" ? (files["_headers"] as string) : undefined);
+  form.append("worker.js", new Blob([workerScript(headers)], { type: "application/javascript+module" }), "worker.js");
+  const script = await cf<{ id?: string; deployment_id?: string | null; etag?: string }>(creds, "PUT", `/workers/scripts/${workerName}`, { form }, f);
+
+  // 4. Serve it on workers.dev.
+  await cf<unknown>(creds, "POST", `/workers/scripts/${workerName}/subdomain`, { json: { enabled: true, previews_enabled: false } }, f);
+
+  return { workerName, url: `https://${workerName}.${subdomain}.workers.dev`, uploaded, reused: assets.length - uploaded, versionId: script.deployment_id ?? script.etag ?? null };
+}
+
+/** Take a site offline by deleting its Worker. A Worker that is already gone counts as removed. */
+export async function removeSite(creds: CloudflareCreds, workerName: string, f: Fetch = fetch): Promise<void> {
+  try {
+    await cf<unknown>(creds, "DELETE", `/workers/scripts/${workerName}?force=true`, {}, f);
+  } catch (e) {
+    if (e instanceof CloudflareError && (e.status === 404 || e.code === 10007)) return;
+    throw e;
   }
 }
 
 /** Fetch the live URL and check it serves this exact version (marker in index.html). */
-export async function verifyLive(url: string, expectedMarker: string): Promise<{ ok: boolean; status: number; reason?: string }> {
-  for (let i = 0; i < 6; i++) {
+export async function verifyLive(url: string, expectedMarker: string, opts: { attempts?: number; waitMs?: number; f?: Fetch } = {}): Promise<{ ok: boolean; status: number; reason?: string }> {
+  const attempts = opts.attempts ?? 12;
+  const f = opts.f ?? fetch;
+  let last = { ok: false, status: 0, reason: "unreachable" };
+  for (let i = 0; i < attempts; i++) {
     try {
-      const res = await fetch(url, { redirect: "follow", headers: { "cache-control": "no-cache" } });
+      const res = await f(`${url}/?v=${Date.now()}`, { redirect: "follow", headers: { "cache-control": "no-cache" } });
       const body = await res.text();
       if (res.ok && body.includes(expectedMarker)) return { ok: true, status: res.status };
-      if (i === 5) return { ok: false, status: res.status, reason: res.ok ? "Live page does not contain this version's marker" : `HTTP ${res.status}` };
+      last = { ok: false, status: res.status, reason: res.ok ? "the live page does not contain this version's marker yet" : `HTTP ${res.status}` };
     } catch (e) {
-      if (i === 5) return { ok: false, status: 0, reason: (e as Error).message };
+      last = { ok: false, status: 0, reason: (e as Error).message };
     }
-    await new Promise((r) => setTimeout(r, 5000));
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, opts.waitMs ?? 5000));
   }
-  return { ok: false, status: 0, reason: "unreachable" };
+  return last;
 }

@@ -153,7 +153,7 @@ export async function handleJob(db: SupabaseClient, job: JobRow): Promise<Record
         if (r.status === "verified") {
           const { data: site } = await db.from("generated_websites").select("business_id").eq("id", String(p.websiteId)).single();
           const { data: biz } = await db.from("businesses").select("email").eq("id", site!.business_id).single();
-          if (biz?.email && p.draftEmail !== false) {
+          if (biz?.email && p.draftEmail === true) {
             await enqueue(db, { organisationId: org, runId: job.run_id, type: "draft_email", payload: { businessId: site!.business_id }, idempotencyKey: `draft:${site!.business_id}:initial` });
           }
         }
