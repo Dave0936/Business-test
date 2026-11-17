@@ -231,3 +231,14 @@ describe("web search research", () => {
     expect(chooseResearchHits(many, new Set())).toHaveLength(20);
   });
 });
+
+describe("type style from answers", () => {
+  it("reads the heading style even when the body is mentioned too", async () => {
+    const { typeStyleFromAnswer } = await import("@/lib/design/studio-rules");
+    expect(typeStyleFromAnswer("Elegant serif headings with a clean sans-serif body")).toBe("serif");
+    expect(typeStyleFromAnswer("Classic serif headings")).toBe("serif");
+    expect(typeStyleFromAnswer("Modern sans-serif throughout")).toBe("sans");
+    expect(typeStyleFromAnswer("Strong condensed headings")).toBe("condensed");
+    expect(typeStyleFromAnswer("Something friendly")).toBeNull();
+  });
+});

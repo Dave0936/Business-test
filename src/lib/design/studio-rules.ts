@@ -197,7 +197,7 @@ export function applyAnswers(brief: DesignBrief, questions: StudioQuestion[], ct
         break;
       }
       case "typography": {
-        const key = /serif/i.test(a) && !/sans/i.test(a) ? "serif" : /condensed/i.test(a) ? "condensed" : /sans/i.test(a) ? "sans" : null;
+        const key = typeStyleFromAnswer(a);
         if (key) { const [h, body] = TYPE_PAIRS[key]; b.typography = { heading: h, body, rationale: `${a}, as chosen in the studio.` }; applied.push(`Type: ${h} / ${body}.`); }
         break;
       }
@@ -211,4 +211,17 @@ export function applyAnswers(brief: DesignBrief, questions: StudioQuestion[], ct
 
 export function isFontChoice(f: string): f is (typeof FONT_CHOICES)[number] {
   return (FONT_CHOICES as readonly string[]).includes(f);
+}
+
+/**
+ * Heading style from a free-text answer. "Serif headings with a sans-serif body" means serif
+ * headings, so "sans-serif" is removed before looking for "serif"; headings decide the pair.
+ */
+export function typeStyleFromAnswer(answer: string): "serif" | "sans" | "condensed" | null {
+  const a = answer.toLowerCase();
+  if (/condensed|compressed|narrow/.test(a)) return "condensed";
+  const withoutSans = a.replace(/sans[- ]?serif/g, " ");
+  if (/\bserif\b|classic|editorial type|traditional/.test(withoutSans)) return "serif";
+  if (/sans/.test(a) || /modern|geometric|clean/.test(a)) return "sans";
+  return null;
 }
