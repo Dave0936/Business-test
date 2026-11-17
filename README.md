@@ -267,6 +267,13 @@ limits while anyone has the app open; the site's page shows the activity and a S
 versions, restore, zip download and sign-in protection. The Claude build loop is covered by
 `tests/unit/bespoke.test.ts`, including a scripted multi-turn build.
 
+`tests/e2e/phase6.mjs` (owner and staff accounts) tests the approval centre with the fictional
+`[Demo]` businesses (load demo data in the test workspace first): staff can view but not decide,
+requesting changes needs a reason, a rebuilt version returns to the queue, approving needs every
+checklist item, and the history records each decision against its version. Approvals are written
+only by `decide_approval()`, which checks the role, the reviewed version, the checklist
+(`website_review_items()`) and the reason in the database.
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -276,7 +283,7 @@ versions, restore, zip download and sign-in protection. The Claude build loop is
 | 3 | Website auditing and opportunity scoring | **Complete and tested** |
 | 4 | Design studio: Pinterest boards, references, picks, questions, editable brief | **Complete and tested** |
 | 5 | Bespoke website builder, preview, revisions, versions, self-hosted fonts, Higgsfield photos, extra languages | **Complete and tested** (real Claude and Higgsfield runs need their keys) |
-| 6 | Quality assurance and approval centre | QA drafted; approval UI not built |
+| 6 | Quality assurance and approval centre: review queue, checklist, decisions with reasons, history, re-run checks | **Complete and tested** |
 | 7 | Cloudflare deployment | Service drafted, untested |
 | 8 | Email generation, approval and sending | Service drafted, untested |
 | 9 | Automation engine | Queue and worker drafted |

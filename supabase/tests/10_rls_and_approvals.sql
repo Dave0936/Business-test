@@ -145,7 +145,15 @@ set role authenticated;
 set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000c","role":"authenticated"}';
 select pg_temp.expect_error(format($q$select public.decide_approval('website', %L, 'approved')$q$, :'site'), 'only owners or administrators');
 set request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated"}';
-select public.decide_approval('website', :'site', 'approved') as site_approval \gset
+-- Approving needs the version reviewed and every checklist item; other decisions need a reason.
+select pg_temp.expect_error(format($q$select public.decide_approval('website', %L, 'approved')$q$, :'site'), 'which version');
+select pg_temp.expect_error(format($q$select public.decide_approval('website', %L, 'approved', null, %L, '{"facts_checked":true}')$q$, :'site', :'v1'), 'confirm every review checklist item');
+select pg_temp.expect_error(format($q$select public.decide_approval('website', %L, 'approved', null, gen_random_uuid(), '{}')$q$, :'site'), 'newer version');
+select pg_temp.expect_error(format($q$select public.decide_approval('website', %L, 'rejected')$q$, :'site'), 'give a reason');
+select pg_temp.expect_error(format($q$insert into public.approvals (organisation_id, subject_type, subject_id, content_hash, decision, decided_by) values (%L, 'website', %L, 'x', 'approved', auth.uid())$q$, :'org_a', :'site'), 'row-level security');
+select public.decide_approval('website', :'site', 'approved', 'Checked', :'v1',
+  '{"facts_checked":true,"no_invented_claims":true,"concept_notice":true,"images_ok":true,"pages_checked":true}') as site_approval \gset
+select pg_temp.assert((select version_id = :'v1'::uuid and checklist ? 'images_ok' from public.approvals where id = :'site_approval'), 'approval records version and checklist');
 select pg_temp.assert((select status::text from public.generated_websites where id = :'site') = 'approved', 'site approved');
 select pg_temp.expect_error(
   format($q$insert into public.deployment_records (organisation_id, business_id, website_id, version_id, approval_id, project_name) values (%L, %L, %L, %L, %L, 'p')$q$, :'org_a', :'biz', :'site', :'v1', :'site_approval'),

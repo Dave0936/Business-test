@@ -16,6 +16,8 @@ import type { SiteFiles, SiteSpec } from "@/lib/sites/spec";
 import { formatDate } from "@/lib/utils";
 import { PreviewFrame } from "./preview-frame";
 import { buildSiteAction, restoreVersion, reviseSiteAction, stopBuildAction } from "../actions";
+import { recheckWebsiteAction } from "../../approvals/actions";
+import { DECISION_LABEL, notReadyReason, type Decision } from "@/lib/approvals/review";
 
 // Server actions here can run a builder step or a web search: allow up to 5 minutes.
 export const maxDuration = 300;
@@ -38,6 +40,7 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
     site.current_version_id ? db.from("quality_reports").select("passed, checks, created_at").eq("version_id", site.current_version_id).order("created_at", { ascending: false }).limit(1).maybeSingle() : Promise.resolve({ data: null }),
     integrationStatus(db, ctx.organisationId),
   ]);
+  const { data: lastDecision } = await db.from("approvals").select("decision, comment, decided_at, version_id").eq("subject_type", "website").eq("subject_id", id).order("decided_at", { ascending: false }).limit(1).maybeSingle();
   const spec = current?.spec as SiteSpec | undefined;
   // Short-lived signed preview link (the sandboxed frame sends no cookies for its assets).
   const { data: previewToken } = current ? await db.rpc("sign_preview", { p_version: current.id }) : { data: null };
@@ -78,9 +81,27 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
         <div className="grid gap-5 xl:grid-cols-[1fr_360px] [&>*]:min-w-0">
           <PreviewFrame base={previewToken ? `/api/preview/${current.id}/~${previewToken}` : `/api/preview/${current.id}`} versionKey={current.id} pages={pages} />
           <div className="space-y-5">
+            <Card data-testid="approval-card">
+              <CardHeader><CardTitle>Approval</CardTitle><CardDescription>{site.status === "awaiting_approval" ? "Passed its checks and waiting for an owner or administrator." : notReadyReason({ status: site.status, qaPassed: qa ? qa.passed : null, generatedBy: current.generated_by, isDemoBusiness: biz.is_demo })}</CardDescription></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {lastDecision && (
+                  <div>
+                    <p className="font-medium">{DECISION_LABEL[lastDecision.decision as Decision]} {formatDate(lastDecision.decided_at, true)}{lastDecision.version_id && lastDecision.version_id !== current.id ? " (an earlier version)" : ""}</p>
+                    {lastDecision.comment && <p className="text-muted-foreground">{lastDecision.comment}</p>}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Link href={`/approvals/${id}`} className="font-medium text-primary hover:underline">{site.status === "awaiting_approval" ? "Review for approval" : "Approval details"}</Link>
+                  {editable && spec?.kind === "bespoke" && aiLive && !active && lastDecision?.decision === "changes_requested" && lastDecision.comment && site.status === "changes_requested" && (
+                    <ActionButton action={reviseSiteAction} hidden={{ websiteId: id, instruction: lastDecision.comment }} label="Revise with this feedback" variant="outline" />
+                  )}
+                </div>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader><CardTitle>Quality checks</CardTitle><CardDescription>{qa ? (qa.passed ? "All required checks passed." : "Some checks failed; it can't be approved until they pass.") : "Not checked yet."}</CardDescription></CardHeader>
               <CardContent>
+                {editable && !active && <div className="mb-3"><ActionButton action={recheckWebsiteAction} hidden={{ websiteId: id }} label="Run checks again" variant="outline" /></div>}
                 <ul className="space-y-2 text-sm" data-testid="qa-list">
                   {checks.map((c) => (
                     <li key={c.id}>

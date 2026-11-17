@@ -142,6 +142,38 @@ export async function saveVersion(db: SupabaseClient, args: { organisationId: st
   return { versionId: v.id, report, approvable };
 }
 
+/**
+ * Run the quality checks again on the current version (for example after the checks were
+ * improved). A passing site goes to approval; a site waiting for approval that now fails
+ * goes back to "generated". Approved, rejected and changes-requested sites keep their status:
+ * they need a new version.
+ */
+export async function recheckCurrentVersion(db: SupabaseClient, organisationId: string, websiteId: string, actorId: string | null): Promise<{ report: QaReport; approvable: boolean; status: string }> {
+  const { data: site, error } = await db.from("generated_websites").select("id, status, business_id, current_version_id, businesses(is_demo)").eq("id", websiteId).eq("organisation_id", organisationId).single();
+  if (error || !site?.current_version_id) throw new Error("This website has no version to check.");
+  const { data: v, error: vErr } = await db.from("website_versions").select("id, spec, files").eq("id", site.current_version_id).single();
+  if (vErr) throw vErr;
+  const spec = v.spec as SiteSpec;
+  const report = await qaVersion(db, spec, v.files as SiteFiles);
+  const { error: qErr } = await db.from("quality_reports").insert({ organisation_id: organisationId, website_id: websiteId, version_id: v.id, passed: report.passed, checks: report.checks });
+  if (qErr) throw qErr;
+  const isDemo = Boolean((site.businesses as unknown as { is_demo: boolean } | null)?.is_demo);
+  const approvable = report.passed && (spec.generatedBy !== "demo" || isDemo);
+  let status = site.status as string;
+  if (approvable && ["generated", "quality_checked"].includes(status)) status = "awaiting_approval";
+  else if (!approvable && status === "awaiting_approval") status = "generated";
+  if (status !== site.status) {
+    const { error: sErr } = await db.from("generated_websites").update({ status }).eq("id", websiteId).eq("organisation_id", organisationId);
+    if (sErr) throw sErr;
+  }
+  await db.from("crm_activities").insert({
+    organisation_id: organisationId, business_id: site.business_id, type: "prototype_rechecked",
+    summary: `Quality checks run again — ${report.passed ? "passed" : "failed"}`,
+    data: { website_id: websiteId, version_id: v.id, passed: report.passed }, actor_id: actorId,
+  });
+  return { report, approvable, status };
+}
+
 export async function generateWebsite(db: SupabaseClient, organisationId: string, businessId: string, opts: { actorId?: string | null; forceTemplate?: boolean } = {}) {
   const { business, org } = await loadContext(db, organisationId, businessId);
   const industry = industryById(business.industry_id);
