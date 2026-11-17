@@ -28,7 +28,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ website
   if (!/^[0-9a-f-]{36}$/i.test(websiteId)) notFound();
   const ctx = await getOrgContext();
   const db = ctx.supabase;
-  const { data: site } = await db.from("generated_websites").select("id, status, current_version_id, business_id, businesses(id, name, is_demo, phone, email, address, city, postal_code, website_url)").eq("id", websiteId).eq("organisation_id", ctx.organisationId).maybeSingle();
+  const { data: site } = await db.from("generated_websites").select("id, status, current_version_id, business_id, businesses!inner(id, name, is_demo, phone, email, address, city, postal_code, website_url)").eq("id", websiteId).eq("organisation_id", ctx.organisationId).maybeSingle();
   if (!site) notFound();
   const biz = site.businesses as unknown as { id: string; name: string; is_demo: boolean; phone: string | null; email: string | null; address: string | null; city: string | null; postal_code: string | null; website_url: string | null };
 

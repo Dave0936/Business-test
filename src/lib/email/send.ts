@@ -31,6 +31,8 @@ export async function sendApprovedEmail(db: SupabaseClient, organisationId: stri
     .single();
   if (error) throw error;
   if (d.status === "sent") return { status: "sent", skipped: true };
+  const { data: owner } = await db.from("businesses").select("deleted_at").eq("id", d.business_id).single();
+  if (owner?.deleted_at) throw new SendBlockedError("This lead is in the recycle bin. Nothing is sent to it.");
   if (d.status !== "approved" && d.status !== "failed") throw new SendBlockedError(`Email is ${d.status}; only approved emails can be sent.`);
 
   const { data: approvals } = await db.from("approvals").select("id, decision, content_hash").eq("subject_type", "email").eq("subject_id", draftId).order("decided_at", { ascending: false }).limit(1);

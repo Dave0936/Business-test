@@ -24,9 +24,9 @@ export default async function EmailsPage() {
   const ctx = await getOrgContext();
   const db = ctx.supabase;
   const [{ data: drafts, error }, { data: org }, { data: live }, { data: suppressed, count: suppressedCount }, status] = await Promise.all([
-    db.from("email_drafts").select("id, subject, to_email, status, kind, sent_at, follow_up_at, created_at, businesses(id, name, is_demo)").eq("organisation_id", ctx.organisationId).order("created_at", { ascending: false }).limit(200),
+    db.from("email_drafts").select("id, subject, to_email, status, kind, sent_at, follow_up_at, created_at, businesses!inner(id, name, is_demo)").eq("organisation_id", ctx.organisationId).order("created_at", { ascending: false }).limit(200),
     db.from("organisations").select("agency_name, agency_postal_address, agency_reply_email, settings").eq("id", ctx.organisationId).single(),
-    db.from("deployment_records").select("business_id, url, businesses(id, name, email, is_demo, status)").eq("organisation_id", ctx.organisationId).eq("status", "verified").order("created_at", { ascending: false }).limit(100),
+    db.from("deployment_records").select("business_id, url, businesses!inner(id, name, email, is_demo, status)").eq("organisation_id", ctx.organisationId).eq("status", "verified").order("created_at", { ascending: false }).limit(100),
     db.from("suppression_lists").select("id, email, domain, reason, created_at", { count: "exact" }).eq("organisation_id", ctx.organisationId).order("created_at", { ascending: false }).limit(30),
     integrationStatus(db, ctx.organisationId),
   ]);

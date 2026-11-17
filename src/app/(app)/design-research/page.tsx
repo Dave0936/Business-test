@@ -32,7 +32,7 @@ export default async function DesignResearchPage({ searchParams }: { searchParam
   const { sector = "restaurant" } = await searchParams;
   const ctx = await getOrgContext();
   const [{ data: briefs }, { data: refs }, { data: qualified }, status] = await Promise.all([
-    ctx.supabase.from("design_briefs").select("id, business_id, generated_by, created_at, brief, businesses(name, is_demo, industry_id)").eq("organisation_id", ctx.organisationId).order("created_at", { ascending: false }).limit(60),
+    ctx.supabase.from("design_briefs").select("id, business_id, generated_by, created_at, brief, businesses!inner(name, is_demo, industry_id)").eq("organisation_id", ctx.organisationId).order("created_at", { ascending: false }).limit(60),
     ctx.supabase.from("design_references").select("id, source, url, title, image_url, sector, business_id").eq("organisation_id", ctx.organisationId).order("created_at", { ascending: false }).limit(30),
     ctx.supabase.from("businesses").select("id, name").eq("organisation_id", ctx.organisationId).in("status", ["qualified", "researching", "prototype_generated", "awaiting_deployment_approval"]).order("lead_score", { ascending: false }).limit(200),
     integrationStatus(ctx.supabase, ctx.organisationId),

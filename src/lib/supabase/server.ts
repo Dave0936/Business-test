@@ -8,12 +8,14 @@ import { env } from "@/lib/env";
  * Per-request client acting as the signed-in user. Row-level security applies,
  * so this is the default for everything a person does in the UI.
  */
-export async function createUserClient(): Promise<SupabaseClient> {
+export async function createUserClient(opts: { includeBinned?: boolean } = {}): Promise<SupabaseClient> {
   if (!env.supabaseUrl || !env.supabaseAnonKey) {
     throw new Error("Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.");
   }
   const cookieStore = await cookies();
   return createServerClient(env.supabaseUrl, env.supabaseAnonKey, {
+    // The recycle bin asks to see binned leads (row-level security hides them otherwise).
+    ...(opts.includeBinned ? { global: { headers: { "x-include-binned": "1" } } } : {}),
     cookies: {
       getAll: () => cookieStore.getAll(),
       setAll: (toSet) => {

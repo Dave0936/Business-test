@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getOrgContext, roleAtLeast } from "@/lib/auth";
-import { runWorkerSlice } from "@/lib/jobs/worker";
+import { runWorkerSlice, scheduleDueWorkflows } from "@/lib/jobs/worker";
 
 // A route handler, not a server action: Next.js runs a page's server actions one at a time,
 // so a long background step would otherwise hold up every button on the page.
@@ -19,6 +19,8 @@ export async function POST(req: NextRequest) {
   }
   let processed = 0;
   if (roleAtLeast(ctx.role, "staff")) {
+    // Saved searches that are due start while someone has the app open, as well as daily by cron.
+    await scheduleDueWorkflows(ctx.supabase, { organisationId: ctx.organisationId }).catch((e) => console.error("schedule failed", e));
     const r = await runWorkerSlice(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, deadlineMs: 20_000, maxJobs: 10 });
     processed = r.processed;
   }

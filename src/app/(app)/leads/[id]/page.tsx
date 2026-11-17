@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { LEAD_STATUSES, humanise, industryById } from "@/lib/industries";
 import { formatDate, formatMoney } from "@/lib/utils";
 import { addNote, queueAction, updateLead } from "../actions";
+import { binLeadAction } from "../bin/actions";
 
 export const metadata: Metadata = { title: "Lead" };
 
@@ -55,6 +56,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             <ActionButton action={queueAction} hidden={{ ...hidden, type: "research", force: "1" }} label={brief ? "Quick new brief" : "Quick brief"} variant="outline" />
             <ActionButton action={queueAction} hidden={{ ...hidden, type: "generate", force: site ? "1" : "" }} label={site ? "Regenerate prototype" : "Generate prototype"} variant="outline" confirm={site ? "This creates a new version and resets approval. Continue?" : undefined} />
             {liveUrl && b.email && <ActionButton action={draftEmailAction} hidden={{ businessId: b.id }} label="Draft email" pendingLabel="Writing…" />}
+            <ActionButton action={binLeadAction} hidden={{ businessId: b.id }} label="Move to bin" variant="ghost" confirm={`Move ${b.name} to the recycle bin? It is hidden everywhere, unsent emails and queued work for it are cancelled, and it is deleted for good after 30 days unless you restore it.`} />
             </>}
           </>
         )}

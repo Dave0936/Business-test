@@ -202,7 +202,15 @@ export async function retentionSweep(db: SupabaseClient, organisationId: string)
     }
     await db.from("business_sources").update({ retention_expires_at: null, raw: null, source_url: null, attribution: `${s.provider} (expired, fields cleared)` }).eq("id", s.id);
   }
-  return { expired: expired?.length ?? 0, cleared };
+  // Leads in the recycle bin for 30 days are deleted permanently (runs with the service role).
+  const cutoff = new Date(Date.now() - 30 * 86400_000).toISOString();
+  const { data: binned } = await db.from("businesses").select("id").eq("organisation_id", organisationId).lt("deleted_at", cutoff).limit(200);
+  let purged = 0;
+  for (const b of binned ?? []) {
+    const { data, error } = await db.rpc("purge_business", { p_business: b.id });
+    if (!error && data) purged++;
+  }
+  return { expired: expired?.length ?? 0, cleared, purged };
 }
 
 export { SendDeferredError };

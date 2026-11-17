@@ -23,7 +23,7 @@ function Fact({ label, value, bad }: { label: string; value: React.ReactNode; ba
 export default async function AuditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await getOrgContext();
-  const { data: a } = await ctx.supabase.from("website_audits").select("*, businesses(id, name)").eq("id", id).eq("organisation_id", ctx.organisationId).maybeSingle();
+  const { data: a } = await ctx.supabase.from("website_audits").select("*, businesses!inner(id, name)").eq("id", id).eq("organisation_id", ctx.organisationId).maybeSingle();
   if (!a) notFound();
   const { data: s } = await ctx.supabase.from("opportunity_scores").select("*").eq("audit_id", id).maybeSingle();
   const o = a.observed as Observations & { noWebsite?: boolean };

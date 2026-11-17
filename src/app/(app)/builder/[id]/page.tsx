@@ -30,7 +30,7 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const ctx = await getOrgContext();
   const db = ctx.supabase;
-  const { data: site } = await db.from("generated_websites").select("id, slug, status, business_id, current_version_id, businesses(id, name, is_demo)").eq("id", id).eq("organisation_id", ctx.organisationId).maybeSingle();
+  const { data: site } = await db.from("generated_websites").select("id, slug, status, business_id, current_version_id, businesses!inner(id, name, is_demo)").eq("id", id).eq("organisation_id", ctx.organisationId).maybeSingle();
   if (!site) notFound();
   const biz = site.businesses as unknown as { id: string; name: string; is_demo: boolean };
   const [{ data: versions }, { data: builds }, { data: current }, { data: qa }, status] = await Promise.all([

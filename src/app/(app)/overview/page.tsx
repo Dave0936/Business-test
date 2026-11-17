@@ -47,7 +47,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
     supabase.from("businesses").select("id", { count: "exact", head: true }).eq("organisation_id", organisationId).lte("follow_up_at", soon),
     supabase.from("jobs").select("id", { count: "exact", head: true }).eq("organisation_id", organisationId).eq("status", "failed").gte("finished_at", new Date(now - 7 * 86400_000).toISOString()),
     supabase.from("businesses").select("id", { count: "exact", head: true }).eq("organisation_id", organisationId).not("lead_score", "is", null),
-    supabase.from("crm_activities").select("id, summary, type, created_at, business_id, businesses(name)").eq("organisation_id", organisationId).order("created_at", { ascending: false }).limit(8),
+    supabase.from("crm_activities").select("id, summary, type, created_at, business_id, businesses!inner(name)").eq("organisation_id", organisationId).order("created_at", { ascending: false }).limit(8),
     listCountries(),
   ]);
   if (m.error) throw m.error;

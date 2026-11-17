@@ -20,6 +20,8 @@ begin
   if not has_function_privilege('authenticated', 'public.org_pending_jobs(uuid)', 'execute') then raise exception 'org_pending_jobs missing'; end if;
   if not has_function_privilege('authenticated', 'public.decide_approval(public.approval_subject, uuid, public.approval_decision, text, uuid, jsonb)', 'execute') then raise exception 'decide_approval missing'; end if;
   if not has_function_privilege('authenticated', 'public.dashboard_metrics(uuid, text, text, timestamptz, timestamptz, public.opportunity_type, int)', 'execute') then raise exception 'dashboard_metrics missing'; end if;
+  if has_function_privilege('anon', 'public.purge_business(uuid)', 'execute') then raise exception 'purge_business exposed to anon'; end if;
+  if not has_function_privilege('authenticated', 'public.purge_business(uuid)', 'execute') then raise exception 'purge_business missing'; end if;
   if not has_function_privilege('anon', 'public.unsubscribe_with_token(text, text)', 'execute') then raise exception 'unsubscribe_with_token missing for anon'; end if;
   if not has_function_privilege('anon', 'public.unsubscribe_token_info(text)', 'execute') then raise exception 'unsubscribe_token_info missing for anon'; end if;
   if not has_function_privilege('service_role', 'public.claim_jobs(text, int)', 'execute') then raise exception 'worker cannot claim'; end if;

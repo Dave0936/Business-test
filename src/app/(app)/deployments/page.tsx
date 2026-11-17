@@ -26,8 +26,8 @@ export default async function DeploymentsPage() {
   const ctx = await getOrgContext();
   const db = ctx.supabase;
   const [{ data: ready }, { data: records, error }, status] = await Promise.all([
-    db.from("generated_websites").select("id, status, current_version_id, businesses(name, is_demo, city), website_versions!generated_websites_current_version_fk(version)").eq("organisation_id", ctx.organisationId).eq("status", "approved").order("updated_at", { ascending: false }).limit(50),
-    db.from("deployment_records").select("id, website_id, version_id, status, url, error, created_at, verified_at, removed_at, project_name, businesses(name, is_demo), website_versions(version), requester:users!deployment_records_requested_by_fkey(full_name, email)").eq("organisation_id", ctx.organisationId).order("created_at", { ascending: false }).limit(100),
+    db.from("generated_websites").select("id, status, current_version_id, businesses!inner(name, is_demo, city), website_versions!generated_websites_current_version_fk(version)").eq("organisation_id", ctx.organisationId).eq("status", "approved").order("updated_at", { ascending: false }).limit(50),
+    db.from("deployment_records").select("id, website_id, version_id, status, url, error, created_at, verified_at, removed_at, project_name, businesses!inner(name, is_demo), website_versions(version), requester:users!deployment_records_requested_by_fkey(full_name, email)").eq("organisation_id", ctx.organisationId).order("created_at", { ascending: false }).limit(100),
     integrationStatus(db, ctx.organisationId),
   ]);
   if (error) throw error;

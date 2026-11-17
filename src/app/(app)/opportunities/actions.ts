@@ -62,8 +62,22 @@ export async function runSearch(_p: ActionState, form: FormData): Promise<Action
       prototypeLimit: d.prototypeLimit,
       agents: { audit: d.audit, research: d.audit && d.research, generate: d.audit && d.research && d.generate, email: true },
     };
+    // A repeating search is saved as a workflow; the scheduler starts later runs.
+    const repeat = z.enum(["off", "weekly", "monthly"]).catch("off").parse(str(form, "repeat") || "off");
+    let workflowId: string | null = null;
+    if (repeat !== "off") {
+      const minutes = repeat === "weekly" ? 7 * 1440 : 28 * 1440;
+      const name = str(form, "workflowName").slice(0, 80) || `${d.towns.map((t) => t.name).slice(0, 3).join(", ")}: ${d.industryIds.length} industr${d.industryIds.length === 1 ? "y" : "ies"}`;
+      const { data: wf, error: wErr } = await ctx.supabase.from("automation_workflows").insert({
+        organisation_id: ctx.organisationId, name, config, frequency_minutes: minutes, enabled: true, paused: false,
+        next_run_at: new Date(Date.now() + minutes * 60_000).toISOString(), last_run_at: new Date().toISOString(), created_by: ctx.user.id,
+      }).select("id").single();
+      if (wErr) throw new Error(`Could not save the repeating search: ${wErr.message}`);
+      workflowId = wf.id;
+      await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "automation.workflow_created", entityType: "automation_workflow", entityId: wf.id, data: { repeat } });
+    }
     // Runs and jobs are created with the member's own permissions (checked in the database).
-    runId = await startWorkflowRun(ctx.supabase, ctx.organisationId, null, config, ctx.user.id);
+    runId = await startWorkflowRun(ctx.supabase, ctx.organisationId, workflowId, config, ctx.user.id);
     await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "discovery.started", entityType: "automation_run", entityId: runId, data: { provider: d.provider, towns: d.towns.map((t) => t.name), industries: d.industryIds } });
     kickWorker(ctx);
   });

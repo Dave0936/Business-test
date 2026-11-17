@@ -7,6 +7,7 @@ import { FilterBar, parseFilters } from "@/components/app/filters";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DemoBadge, ScoreBadge, StatusBadge } from "@/components/app/badges";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LEAD_STATUSES, humanise, industryById } from "@/lib/industries";
 import { formatDate } from "@/lib/utils";
 import { BulkBar } from "./bulk-bar";
@@ -34,11 +35,12 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   if (f.q) q = q.ilike("name", `%${f.q.replace(/[%_]/g, "")}%`);
   const { data: rows, count, error } = await q.order("lead_score", { ascending: false, nullsFirst: false }).order("discovered_at", { ascending: false }).range((page - 1) * PAGE, page * PAGE - 1);
   if (error) throw error;
-  const qs = (p: number) => `?${new URLSearchParams({ ...sp, page: String(p) })}`;
+  const qs = (p: number) => `?${new URLSearchParams(Object.fromEntries(Object.entries({ ...sp, page: String(p) }).filter(([k]) => k !== "binned")))}`;
 
   return (
     <>
-      <PageHeader title="Business Leads" description={`${count ?? 0} businesses. Select rows to audit, research or generate prototypes in bulk.`} actions={<><Button variant="outline" asChild><a href={`/api/export/leads?${new URLSearchParams(sp)}`}>Export CSV</a></Button><Button asChild><Link href="/opportunities">Find more</Link></Button></>} />
+      <PageHeader title="Business Leads" description={`${count ?? 0} businesses. Select rows to audit, research or generate prototypes in bulk.`} actions={<><Button variant="ghost" asChild><Link href="/leads/bin">Recycle bin</Link></Button><Button variant="outline" asChild><a href={`/api/export/leads?${new URLSearchParams(sp)}`}>Export CSV</a></Button><Button asChild><Link href="/opportunities">Find more</Link></Button></>} />
+      {sp.binned && <Alert variant="success" className="mb-4"><AlertDescription>Moved to the <Link href="/leads/bin" className="font-medium underline">recycle bin</Link>. You can restore it there for 30 days.</AlertDescription></Alert>}
       <FilterBar values={f} showStatus statuses={LEAD_STATUSES} showSearch />
       {rows && rows.length ? (
         <form id="bulk" className="rounded-xl border bg-card">

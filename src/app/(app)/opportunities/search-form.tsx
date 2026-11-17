@@ -125,6 +125,14 @@ export function SearchForm({ providers, countries, industries, disabled, default
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="generate" className="size-4" />Generate prototypes, up to <input name="prototypeLimit" type="number" min={0} max={100} defaultValue={5} className="h-7 w-16 rounded border px-1" aria-label="Prototype limit" /> per search</label>
           <p className="text-xs text-muted-foreground">Prototypes stop at the approval centre. Nothing is deployed or emailed without approval.</p>
         </fieldset>
+        <fieldset className="grid gap-3 rounded-lg border p-3 sm:col-span-2 sm:grid-cols-2">
+          <legend className="px-1 text-sm font-medium">Repeat</legend>
+          <div className="space-y-1.5"><Label htmlFor="repeat">Run this search again</Label>
+            <select id="repeat" name="repeat" defaultValue="off" className="h-9 w-full rounded-md border bg-background px-2 text-sm"><option value="off">Just this once</option><option value="weekly">Every week</option><option value="monthly">Every 4 weeks</option></select>
+          </div>
+          <div className="space-y-1.5"><Label htmlFor="workflowName">Name (for a repeating search)</Label><Input id="workflowName" name="workflowName" maxLength={80} placeholder="e.g. Aberdeen restaurants" /></div>
+          <p className="text-xs text-muted-foreground sm:col-span-2">Repeating searches appear in the Automation Centre, where you can pause, change or delete them. New businesses are added; ones already found are merged.</p>
+        </fieldset>
       </div>
       {paid && towns.length > 0 && (
         <p className="rounded-md bg-warning/10 px-3 py-2 text-sm" role="note">

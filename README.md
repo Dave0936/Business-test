@@ -291,6 +291,14 @@ only the sending service (service role) can mark an email sending or sent. Webho
 verified with the organisation's Svix signing secret; permanent bounces and complaints suppress the
 address. Unsubscribing uses `unsubscribe_with_token()`, which needs no sign-in and reveals nothing.
 
+`tests/e2e/phase9.mjs` (owner and staff accounts) covers pausing and resuming all automation, the
+recycle bin (bin, hidden everywhere, restore, delete permanently) and the cron endpoint refusing
+callers without `CRON_SECRET`. Searches can repeat weekly or every four weeks; due searches start
+from the daily Vercel cron (`/api/cron/tick`, set `CRON_SECRET`, which Vercel sends as a bearer
+token; it also runs the retention sweep) and whenever someone has the app open. Binned leads are
+hidden by row-level security; the bin page asks for them with the `x-include-binned` header.
+`bin_business()`, `purge_business()` and `cancel_run()` do the privileged parts with role checks.
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -303,7 +311,7 @@ address. Unsubscribing uses `unsubscribe_with_token()`, which needs no sign-in a
 | 6 | Quality assurance and approval centre: review queue, checklist, decisions with reasons, history, re-run checks | **Complete and tested** |
 | 7 | Cloudflare deployment: one Worker per approved concept on workers.dev, live check of the exact version, take offline, history | **Complete and tested** (real uploads need a Cloudflare token) |
 | 8 | Email drafting (Claude, observed facts only), compliance checks, approval, sending through Resend, one-click unsubscribe, bounce and complaint suppression, legitimate interests assessment | **Complete and tested** (real sending needs Resend) |
-| 9 | Automation engine | Queue and worker drafted |
+| 9 | Automation Centre (repeating searches, pause all, runs, spend, problems, activity), daily cron, recycle bin with 30-day permanent deletion | **Complete and tested** |
 | 10 | Analytics, security hardening, production testing | Not started |
 
 "Drafted" means code exists in `src/lib`, but the phase is not complete until it has been tested

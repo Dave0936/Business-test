@@ -15,7 +15,7 @@ export default async function BuilderPage() {
   const ctx = await getOrgContext();
   const { data: sites, error } = await ctx.supabase
     .from("generated_websites")
-    .select("id, status, updated_at, current_version_id, businesses(name, is_demo, city), website_versions!generated_websites_current_version_fk(version, spec, generated_by), quality_reports(passed, created_at, version_id)")
+    .select("id, status, updated_at, current_version_id, businesses!inner(name, is_demo, city), website_versions!generated_websites_current_version_fk(version, spec, generated_by), quality_reports(passed, created_at, version_id)")
     .eq("organisation_id", ctx.organisationId)
     .order("updated_at", { ascending: false })
     .limit(100);

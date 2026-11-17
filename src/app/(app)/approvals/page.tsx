@@ -18,7 +18,7 @@ type SiteRow = { id: string; status: string; updated_at: string; businesses: { n
 export default async function ApprovalsPage() {
   const ctx = await getOrgContext();
   const db = ctx.supabase;
-  const select = "id, status, updated_at, businesses(name, city, is_demo), website_versions!generated_websites_current_version_fk(version, created_at, change_note)";
+  const select = "id, status, updated_at, businesses!inner(name, city, is_demo), website_versions!generated_websites_current_version_fk(version, created_at, change_note)";
   const [{ data: waiting, error }, { data: needsWork }, { data: decisions }] = await Promise.all([
     db.from("generated_websites").select(select).eq("organisation_id", ctx.organisationId).eq("status", "awaiting_approval").order("updated_at", { ascending: true }).limit(100),
     db.from("generated_websites").select(select).eq("organisation_id", ctx.organisationId).in("status", ["changes_requested", "rejected"]).order("updated_at", { ascending: false }).limit(50),
@@ -26,7 +26,7 @@ export default async function ApprovalsPage() {
   ]);
   if (error) throw error;
   const siteIds = [...new Set((decisions ?? []).map((d) => d.subject_id))];
-  const { data: decided } = siteIds.length ? await db.from("generated_websites").select("id, businesses(name)").in("id", siteIds) : { data: [] };
+  const { data: decided } = siteIds.length ? await db.from("generated_websites").select("id, businesses!inner(name)").in("id", siteIds) : { data: [] };
   const nameOf = new Map((decided ?? []).map((s) => [s.id, (s.businesses as unknown as { name: string }).name]));
   const versionIds = (decisions ?? []).map((d) => d.version_id).filter(Boolean) as string[];
   const { data: vs } = versionIds.length ? await db.from("website_versions").select("id, version").in("id", versionIds) : { data: [] };

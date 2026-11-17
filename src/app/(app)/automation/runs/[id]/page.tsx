@@ -7,6 +7,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/app/badges";
 import { humanise } from "@/lib/industries";
 import { formatDate } from "@/lib/utils";
+import { canWrite } from "@/lib/auth";
+import { ActionButton } from "@/components/app/action-button";
+import { cancelRunAction } from "../../actions";
 
 export const metadata: Metadata = { title: "Run" };
 
@@ -23,7 +26,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
 
   return (
     <>
-      <PageHeader title="Search run" description={<span className="flex items-center gap-2">Started {formatDate(run.started_at, true)} <StatusBadge status={run.status} /> {queued ? `· ${queued} jobs in progress (updates while this page is open)` : ""}</span>} />
+      <PageHeader title="Search run" actions={canWrite(ctx.role) && (run.status === "running" || run.status === "paused") ? <ActionButton action={cancelRunAction} hidden={{ runId: id }} label="Stop run" variant="outline" confirm="Stop this run? Queued work is cancelled; leads, audits and prototypes already made are kept." /> : undefined} description={<span className="flex items-center gap-2">Started {formatDate(run.started_at, true)} <StatusBadge status={run.status} /> {queued ? `· ${queued} jobs in progress (updates while this page is open)` : ""}</span>} />
       {run.error && <p className="mb-4 text-sm text-destructive">{run.error}</p>}
       <div className="grid gap-5 lg:grid-cols-[1fr_2fr]">
         <Card>

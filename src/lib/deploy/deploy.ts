@@ -49,6 +49,8 @@ export async function deployApprovedWebsite(db: SupabaseClient, organisationId: 
     .eq("organisation_id", organisationId)
     .single();
   if (error) throw error;
+  const { data: owner } = await db.from("businesses").select("deleted_at").eq("id", site.business_id).single();
+  if (owner?.deleted_at) throw new DeploymentBlockedError("This lead is in the recycle bin. Restore it first.");
   if (site.status !== "approved" && site.status !== "deployed") throw new DeploymentBlockedError(`This website is ${site.status.replace(/_/g, " ")}, not approved.`);
   const version = site.website_versions as unknown as { id: string; spec: SiteSpec; files: SiteFiles; content_hash: string };
 

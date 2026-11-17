@@ -72,22 +72,39 @@ export async function runWorkerSlice(db: SupabaseClient, opts: SliceOptions = {}
   return { processed, failed };
 }
 
-/** Start runs for workflows that are due. Called by the system worker and the cron endpoint. */
-export async function scheduleDueWorkflows(db: SupabaseClient): Promise<number> {
-  const { data: due } = await db.from("automation_workflows").select("*").eq("enabled", true).eq("paused", false).lte("next_run_at", new Date().toISOString()).limit(20);
+/** True when an owner or administrator has paused all automation for the organisation. */
+export async function automationPaused(db: SupabaseClient, organisationId: string): Promise<boolean> {
+  const { data } = await db.from("organisations").select("settings").eq("id", organisationId).maybeSingle();
+  return Boolean((data?.settings as { automation_paused?: boolean } | null)?.automation_paused);
+}
+
+/**
+ * Start runs for workflows that are due. Called by the daily cron (service role, every
+ * organisation, plus the retention sweep) and while someone has the app open (their own
+ * organisation, as themselves). Organisations with automation paused are skipped.
+ */
+export async function scheduleDueWorkflows(db: SupabaseClient, opts: { organisationId?: string; retention?: boolean } = {}): Promise<number> {
+  let q = db.from("automation_workflows").select("*").eq("enabled", true).eq("paused", false).lte("next_run_at", new Date().toISOString()).limit(20);
+  if (opts.organisationId) q = q.eq("organisation_id", opts.organisationId);
+  const { data: due } = await q;
+  const paused = new Map<string, boolean>();
   let started = 0;
   for (const wf of due ?? []) {
+    if (!paused.has(wf.organisation_id)) paused.set(wf.organisation_id, await automationPaused(db, wf.organisation_id));
+    if (paused.get(wf.organisation_id)) continue;
     // Claim the schedule slot first so two schedulers cannot both start it.
     const next = wf.frequency_minutes ? new Date(Date.now() + wf.frequency_minutes * 60_000).toISOString() : null;
     const { data: claimed } = await db.from("automation_workflows").update({ next_run_at: next, last_run_at: new Date().toISOString() }).eq("id", wf.id).eq("next_run_at", wf.next_run_at).select("id");
     if (!claimed?.length) continue;
-    await startWorkflowRun(db, wf.organisation_id, wf.id, wf.config, null);
+    await startWorkflowRun(db, wf.organisation_id, wf.id, wf.config, wf.created_by ?? null);
     started++;
   }
-  // Daily retention sweep per organisation.
-  const { data: orgs } = await db.from("organisations").select("id");
-  for (const o of orgs ?? []) {
-    await enqueue(db, { organisationId: o.id, type: "retention_sweep", payload: {}, idempotencyKey: `retention:${new Date().toISOString().slice(0, 10)}` });
+  if (opts.retention) {
+    // Daily retention sweep per organisation (expired provider data, recycle bin).
+    const { data: orgs } = await db.from("organisations").select("id");
+    for (const o of orgs ?? []) {
+      await enqueue(db, { organisationId: o.id, type: "retention_sweep", payload: {}, idempotencyKey: `retention:${new Date().toISOString().slice(0, 10)}` });
+    }
   }
   return started;
 }

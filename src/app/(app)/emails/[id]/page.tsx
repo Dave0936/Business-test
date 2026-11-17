@@ -30,7 +30,7 @@ export default async function EmailPage({ params }: { params: Promise<{ id: stri
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const ctx = await getOrgContext();
   const db = ctx.supabase;
-  const { data: d } = await db.from("email_drafts").select("id, business_id, kind, to_email, subject, body_text, status, compliance, generated_by, sent_at, follow_up_at, last_error, created_at, deployment_id, businesses(id, name, is_demo, status)").eq("id", id).eq("organisation_id", ctx.organisationId).maybeSingle();
+  const { data: d } = await db.from("email_drafts").select("id, business_id, kind, to_email, subject, body_text, status, compliance, generated_by, sent_at, follow_up_at, last_error, created_at, deployment_id, businesses!inner(id, name, is_demo, status)").eq("id", id).eq("organisation_id", ctx.organisationId).maybeSingle();
   if (!d) notFound();
   const biz = d.businesses as unknown as { id: string; name: string; is_demo: boolean; status: string };
   const [{ data: events }, { data: decisions }, { data: dep }, { data: followUps }, status] = await Promise.all([
