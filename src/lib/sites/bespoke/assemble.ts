@@ -121,6 +121,8 @@ export function assembleBespoke(source: Record<string, string>, ctx: AssembleCon
       if (value === null) continue;
       html = html.split(token).join(esc(value));
     }
+    // The builder sometimes writes href="tel:{{PHONE_LINK}}": don't double the scheme.
+    html = html.replace(/\b(tel|mailto):\s*(?:\1:)+/gi, "$1:");
     const leftover = html.match(/\{\{[A-Z_]+\}\}/g);
     if (leftover) {
       notes.push(`${path}: removed placeholders for missing details (${[...new Set(leftover)].join(", ")}).`);

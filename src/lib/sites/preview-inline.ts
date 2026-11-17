@@ -7,26 +7,35 @@ import type { SiteFiles } from "./spec";
  * For the in-app preview only: put a page's own stylesheets, scripts and font files inside the
  * page, so the sandboxed preview frame has nothing to fetch for them. Browsers differ in how
  * they treat requests from a sandboxed (opaque-origin) frame; inlining avoids all of that.
+ * Images up to 600 KB are inlined as well.
  * Published sites keep their separate files.
  */
 
 const MIME: Record<string, string> = { woff2: "font/woff2", woff: "font/woff", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", svg: "image/svg+xml", gif: "image/gif" };
-const MAX_INLINE_ASSET = 400_000; // bytes; larger files stay as links
+const MAX_INLINE_ASSET = 600_000; // bytes; larger files stay as links
 
 function asText(f: SiteFiles[string] | undefined): string | null {
   return typeof f === "string" ? f : null;
 }
 
-/** Turn url(...) references to small local files (fonts) into data: URLs, relative to the CSS file. */
-function inlineCssUrls(css: string, cssPath: string, files: SiteFiles): string {
+/** A local binary file (font or image) as a data: URL, or null if it is missing, unknown or too big. */
+function dataUrl(fromPath: string, ref: string, files: SiteFiles): string | null {
+  if (/^(data:|https?:|#|mailto:|tel:)/i.test(ref)) return null;
+  const target = resolveSitePath(fromPath, ref);
+  const f = target ? files[target] : undefined;
+  if (!f || typeof f === "string") return null;
+  const ext = target!.split(".").pop()!.toLowerCase();
+  // The stored type wins: photos can be re-encoded (e.g. to WebP) under their original name.
+  const mime = f.contentType || MIME[ext];
+  if (!mime || !/^(image|font)\//.test(mime) || f.base64.length * 0.75 > MAX_INLINE_ASSET) return null;
+  return `data:${mime};base64,${f.base64}`;
+}
+
+/** Turn url(...) references to small local files (fonts, images) into data: URLs, relative to fromPath. */
+function inlineCssUrls(css: string, fromPath: string, files: SiteFiles): string {
   return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (whole, _q, ref: string) => {
-    if (/^(data:|https?:|#)/i.test(ref)) return whole;
-    const target = resolveSitePath(cssPath, ref);
-    const f = target ? files[target] : undefined;
-    if (!f || typeof f === "string") return whole;
-    const ext = target!.split(".").pop()!.toLowerCase();
-    if (!MIME[ext] || f.base64.length * 0.75 > MAX_INLINE_ASSET) return whole;
-    return `url("data:${MIME[ext]};base64,${f.base64}")`;
+    const d = dataUrl(fromPath, ref.trim(), files);
+    return d ? `url("${d}")` : whole;
   });
 }
 
@@ -59,6 +68,28 @@ export function inlinePageAssets(pagePath: string, files: SiteFiles): InlinedPag
     const body = js.replace(/<\/script/gi, "<\\/script");
     scriptHashes.push(`'sha256-${createHash("sha256").update(body, "utf8").digest("base64")}'`);
     $(el).replaceWith(`<script>${body}</script>`);
+  });
+
+  // Images too: some browsers will not load a sandboxed frame's images from the app.
+  $("img[src], source[src], link[rel~='icon'][href]").each((_, el) => {
+    const attr = el.tagName === "link" ? "href" : "src";
+    const d = dataUrl(pagePath, $(el).attr(attr) ?? "", files);
+    if (d) $(el).attr(attr, d);
+  });
+  $("img[srcset], source[srcset]").each((_, el) => {
+    const set = ($(el).attr("srcset") ?? "").split(",").map((part) => {
+      const [u, ...rest] = part.trim().split(/\s+/);
+      const d = u ? dataUrl(pagePath, u, files) : null;
+      return d ? [d, ...rest].join(" ") : part.trim();
+    });
+    $(el).attr("srcset", set.join(", "));
+  });
+  $("[style*='url(']").each((_, el) => {
+    $(el).attr("style", inlineCssUrls($(el).attr("style") ?? "", pagePath, files));
+  });
+  $("style").each((_, el) => {
+    const css = $(el).html() ?? "";
+    if (css.includes("url(")) $(el).text(inlineCssUrls(css, pagePath, files));
   });
 
   // "defer" has no effect on inline scripts, and in <head> they would run before the page

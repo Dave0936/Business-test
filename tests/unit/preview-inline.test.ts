@@ -10,17 +10,18 @@ const FILES: SiteFiles = {
   "fonts/fonts.css": '@font-face{font-family:"Fraunces";src:url("fraunces-latin-400.woff2") format("woff2")}',
   "fonts/fraunces-latin-400.woff2": { base64: Buffer.from("wOF2fake").toString("base64"), contentType: "font/woff2" },
   "script.js": 'document.body.dataset.ready="1"; var s="</script>";',
-  "assets/generated/a.png": { base64: Buffer.alloc(10).toString("base64"), contentType: "image/png" },
+  "assets/generated/a.png": { base64: Buffer.alloc(10).toString("base64"), contentType: "image/webp" },
 };
 
 describe("preview pages carry their own assets", () => {
-  it("inlines stylesheets, fonts and scripts, leaving photos as links", () => {
+  it("inlines stylesheets, fonts, scripts and photos", () => {
     const { html, scriptHashes } = inlinePageAssets("index.html", FILES);
     expect(html).not.toMatch(/<link rel="stylesheet"/);
     expect(html).toContain("body{color:#111}");
     expect(html).toMatch(/url\("data:font\/woff2;base64,/);
     expect(html).not.toMatch(/<script src=/);
-    expect(html).toContain('src="assets/generated/a.png"');
+    // Photos are inlined with their stored type (here re-encoded as WebP under a .png name).
+    expect(html).toMatch(/<img src="data:image\/webp;base64,/);
     expect(html).toMatch(/<script type="application\/ld\+json">/);
     // The script now sits at the end of <body>, and its hash matches its exact text.
     const body = html.slice(html.indexOf("<body>"));

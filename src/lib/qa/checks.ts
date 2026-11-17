@@ -89,6 +89,8 @@ export function runQaChecks(files: SiteFiles, spec: SiteSpec, ctx: QaContext): Q
         const href = ($(el).attr("href") ?? "").trim();
         if (!href) return void broken.push(`${file}: empty link.`);
         if (/^javascript:/i.test(href)) return void broken.push(`${file}: javascript: link.`);
+        if (/^(tel:\s*tel:|mailto:\s*mailto:)/i.test(href)) return void broken.push(`${file}: doubled link ${href}.`);
+        if (/^tel:/i.test(href) && !/^tel:\+?[\d\s().-]{5,}$/i.test(href)) return void broken.push(`${file}: phone link ${href} is not a number.`);
         if (/^(tel:|mailto:)/i.test(href)) return;
         if (/^https:\/\//i.test(href)) return;
         if (/^http:\/\//i.test(href)) return void broken.push(`${file}: insecure link ${href}.`);
