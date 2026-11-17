@@ -69,7 +69,7 @@ export default async function IntegrationsPage() {
                         {fields.map((f) => (
                           <div key={f.name} className="space-y-1">
                             <Label htmlFor={`${i.key}-${f.name}`}>{f.label}</Label>
-                            <Input id={`${i.key}-${f.name}`} name={f.name} type={f.secret ? "password" : "text"} autoComplete="off" placeholder={f.placeholder} required />
+                            <Input id={`${i.key}-${f.name}`} name={f.name} type={f.secret ? "password" : "text"} autoComplete="off" placeholder={f.placeholder} required={!f.optional} />
                           </div>
                         ))}
                         <p className="text-xs text-muted-foreground">Checked with {i.name} first, then stored encrypted. It is never shown again.</p>

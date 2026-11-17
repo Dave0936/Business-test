@@ -64,7 +64,8 @@ export async function updateLead(_p: ActionState, form: FormData): Promise<Actio
     const changes = Object.keys(patch).join(", ");
     await ctx.supabase.from("crm_activities").insert({ organisation_id: ctx.organisationId, business_id: d.id, type: "updated", summary: d.status && d.status !== before?.status ? `Status changed to ${d.status.replace(/_/g, " ")}` : `Updated ${changes}`, data: patch, actor_id: ctx.user.id });
     if (d.status === "suppressed" && before?.email) {
-      await ctx.supabase.from("suppression_lists").upsert({ organisation_id: ctx.organisationId, email: before.email.toLowerCase(), reason: "do_not_contact", source: "crm" }, { onConflict: "organisation_id,email", ignoreDuplicates: true });
+      const { error: sErr } = await ctx.supabase.from("suppression_lists").insert({ organisation_id: ctx.organisationId, email: before.email.toLowerCase(), reason: "do_not_contact", source: "crm" });
+      if (sErr && sErr.code !== "23505") throw sErr;
     }
     await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "lead.updated", entityType: "business", entityId: d.id, data: { fields: Object.keys(patch) } });
     return "Saved.";

@@ -102,7 +102,7 @@ the server can reach Supabase.
 | `PINTEREST_ACCESS_TOKEN` | Pinterest references (needs approved API access) | No |
 | `UNSPLASH_ACCESS_KEY` | Licensed photos in prototypes | No |
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Deploying approved prototypes (token needs *Account › Workers Scripts › Edit*; the account needs a workers.dev subdomain). Organisations can also connect their own under Integrations. Deploying also needs `SUPABASE_SERVICE_ROLE_KEY`. | No |
-| `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_WEBHOOK_SECRET` | Sending approved emails, delivery events (verified domain required) | No |
+| `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_WEBHOOK_SECRET` | Sending approved emails, delivery events (verified domain required). Or connect Resend per organisation under Integrations. Point a Resend webhook at `/api/webhooks/resend` (events: delivered, bounced, complained). | No |
 
 Without an optional credential, that feature shows as **Not connected** or **Demo mode** on the
 Integrations page. Nothing is faked. Owners and administrators can also connect keys per workspace
@@ -282,6 +282,15 @@ a stand-in API). A deployment is recorded as live only after Cloudflare accepts 
 the workers.dev address serves the approved version's marker. "Take offline" deletes the Worker
 and keeps the approval and history.
 
+`tests/e2e/phase8.mjs` (owner and staff accounts) covers the email page's setup checklist, recording
+the legitimate interests assessment (Settings), the do-not-contact list, the public unsubscribe
+page (`/u/<token>`) and one-click endpoint (`/api/unsubscribe/<token>`, RFC 8058), and the Resend
+webhook ignoring unknown messages. Each email is checked against the country's rules when drafted,
+approved and sent (`src/lib/email/compliance.ts`); approval goes through `decide_approval()`, and
+only the sending service (service role) can mark an email sending or sent. Webhook events are
+verified with the organisation's Svix signing secret; permanent bounces and complaints suppress the
+address. Unsubscribing uses `unsubscribe_with_token()`, which needs no sign-in and reveals nothing.
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -293,7 +302,7 @@ and keeps the approval and history.
 | 5 | Bespoke website builder, preview, revisions, versions, self-hosted fonts, Higgsfield photos, extra languages | **Complete and tested** (real Claude and Higgsfield runs need their keys) |
 | 6 | Quality assurance and approval centre: review queue, checklist, decisions with reasons, history, re-run checks | **Complete and tested** |
 | 7 | Cloudflare deployment: one Worker per approved concept on workers.dev, live check of the exact version, take offline, history | **Complete and tested** (real uploads need a Cloudflare token) |
-| 8 | Email generation, approval and sending | Service drafted, untested |
+| 8 | Email drafting (Claude, observed facts only), compliance checks, approval, sending through Resend, one-click unsubscribe, bounce and complaint suppression, legitimate interests assessment | **Complete and tested** (real sending needs Resend) |
 | 9 | Automation engine | Queue and worker drafted |
 | 10 | Analytics, security hardening, production testing | Not started |
 

@@ -31,7 +31,9 @@ export async function loadComplianceContext(db: SupabaseClient, organisationId: 
   return { business: b, org, rule, suppression, liaDone: Boolean(settings.lia?.completed_at) };
 }
 
-export async function evaluateDraft(db: SupabaseClient, organisationId: string, draft: { business_id: string; to_email: string; body_text: string; compliance?: { confirmations?: ComplianceConfirmations; unsubscribe_url?: string } }) {
+type StoredCompliance = { confirmations?: ComplianceConfirmations; unsubscribe_url?: string; unsubscribe_post_url?: string };
+
+export async function evaluateDraft(db: SupabaseClient, organisationId: string, draft: { business_id: string; to_email: string; body_text: string; compliance?: StoredCompliance }) {
   const c = await loadComplianceContext(db, organisationId, draft.business_id, draft.to_email);
   const confirmations = { ...(draft.compliance?.confirmations ?? {}), legitimate_interests_assessed: c.liaDone };
   const result = evaluateCompliance({
@@ -47,14 +49,14 @@ export async function evaluateDraft(db: SupabaseClient, organisationId: string, 
     confirmations,
     emailSource: c.business.email_source,
   });
-  return { ...result, confirmations, unsubscribe_url: draft.compliance?.unsubscribe_url ?? null };
+  return { ...result, confirmations, unsubscribe_url: draft.compliance?.unsubscribe_url ?? null, unsubscribe_post_url: draft.compliance?.unsubscribe_post_url ?? null };
 }
 
 /**
  * Create a personalised draft for a business whose concept has been deployed and verified.
  * The draft goes to "awaiting_approval" (or "blocked" if compliance rules forbid it).
  */
-export async function draftEmail(db: SupabaseClient, organisationId: string, businessId: string, opts: { actorId?: string | null; kind?: "initial" | "follow_up"; templateId?: string } = {}) {
+export async function draftEmail(db: SupabaseClient, organisationId: string, businessId: string, opts: { actorId?: string | null; kind?: "initial" | "follow_up"; templateId?: string; appUrl?: string } = {}) {
   const kind = opts.kind ?? "initial";
   const { data: b, error } = await db.from("businesses").select("id, name, category, city, country_code, email, email_source, language, is_demo").eq("id", businessId).eq("organisation_id", organisationId).single();
   if (error) throw error;
@@ -98,7 +100,10 @@ export async function draftEmail(db: SupabaseClient, organisationId: string, bus
   }
 
   const token = randomToken();
-  const unsubscribeUrl = `${env.appUrl.replace(/\/$/, "")}/u/${token}`;
+  // The app's public address (from the request when available, so links never point at localhost).
+  const base = (opts.appUrl ?? env.appUrl).replace(/\/$/, "");
+  const unsubscribeUrl = `${base}/u/${token}`;
+  const unsubscribePostUrl = `${base}/api/unsubscribe/${token}`;
   const body = renderTemplate(tpl.body, {
     business_name: b.name,
     greeting_name: parts.greeting_name,
@@ -110,7 +115,7 @@ export async function draftEmail(db: SupabaseClient, organisationId: string, bus
   });
   const fullBody = `${body}\n\n${complianceFooter({ agencyName, postalAddress: org.agency_postal_address, replyEmail: org.agency_reply_email, agencyWebsite: org.agency_website, unsubscribeUrl, businessName: b.name, source: SOURCE_LABEL[b.email_source] ?? "public source" })}`;
 
-  const draft = { business_id: businessId, to_email: b.email, body_text: fullBody, compliance: { unsubscribe_url: unsubscribeUrl } };
+  const draft = { business_id: businessId, to_email: b.email, body_text: fullBody, compliance: { unsubscribe_url: unsubscribeUrl, unsubscribe_post_url: unsubscribePostUrl } };
   const compliance = await evaluateDraft(db, organisationId, draft);
 
   const idempotencyKey = sha256(`${organisationId}:${businessId}:${b.email.toLowerCase()}:${kind}:${kind === "initial" ? "v1" : new Date().toISOString().slice(0, 10)}`);
@@ -138,4 +143,35 @@ export async function draftEmail(db: SupabaseClient, organisationId: string, bus
     data: { draft_id: row.id, compliance_status: compliance.status }, actor_id: opts.actorId ?? null,
   });
   return { draftId: row.id as string, status: row.status as string, compliance };
+}
+
+/** Re-run the compliance checks on a draft (after settings, the lead or confirmations changed). */
+export async function refreshCompliance(db: SupabaseClient, organisationId: string, draftId: string, confirm?: Partial<ComplianceConfirmations>) {
+  const { data: d, error } = await db.from("email_drafts").select("id, business_id, to_email, body_text, status, compliance").eq("id", draftId).eq("organisation_id", organisationId).single();
+  if (error) throw error;
+  if (["sent", "sending", "cancelled"].includes(d.status)) throw new Error(`This email is ${d.status}; its checks can no longer change.`);
+  const stored = (d.compliance ?? {}) as StoredCompliance;
+  const compliance = await evaluateDraft(db, organisationId, { ...d, compliance: { ...stored, confirmations: { ...(stored.confirmations ?? {}), ...(confirm ?? {}) } } });
+  // A draft that can no longer be sent is blocked; one that now can goes back to approval.
+  const status = compliance.status === "blocked" ? "blocked" : d.status === "blocked" ? "awaiting_approval" : d.status;
+  const { error: uErr } = await db.from("email_drafts").update({ compliance, status }).eq("id", draftId).eq("organisation_id", organisationId);
+  if (uErr) throw uErr;
+  return { compliance, status };
+}
+
+/**
+ * Save an edited subject and body. The system footer (sender, address, opt-out link) must stay;
+ * any edit voids an earlier approval (enforced by the database too).
+ */
+export async function updateDraftContent(db: SupabaseClient, organisationId: string, draftId: string, subject: string, body: string) {
+  const { data: d, error } = await db.from("email_drafts").select("id, business_id, to_email, status, compliance").eq("id", draftId).eq("organisation_id", organisationId).single();
+  if (error) throw error;
+  if (["sent", "sending", "cancelled"].includes(d.status)) throw new Error(`This email is ${d.status} and can't be edited.`);
+  const stored = (d.compliance ?? {}) as StoredCompliance;
+  if (stored.unsubscribe_url && !body.includes(stored.unsubscribe_url)) throw new Error("Keep the footer with the unsubscribe link: it must stay in the email.");
+  const compliance = await evaluateDraft(db, organisationId, { business_id: d.business_id, to_email: d.to_email, body_text: body, compliance: stored });
+  const status = compliance.status === "blocked" ? "blocked" : "awaiting_approval";
+  const { error: uErr } = await db.from("email_drafts").update({ subject, body_text: body, compliance, status, generated_by: "manual" }).eq("id", draftId).eq("organisation_id", organisationId);
+  if (uErr) throw uErr;
+  return { compliance, status };
 }

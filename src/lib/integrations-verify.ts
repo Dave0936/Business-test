@@ -6,14 +6,14 @@ import "server-only";
  */
 export interface VerifyResult { ok: boolean; detail: string; config?: Record<string, string> }
 
-const FIELDS: Record<string, { name: string; label: string; secret: boolean; placeholder?: string }[]> = {
+const FIELDS: Record<string, { name: string; label: string; secret: boolean; placeholder?: string; optional?: boolean }[]> = {
   serpapi: [{ name: "apiKey", label: "API key", secret: true }],
   google_places: [{ name: "apiKey", label: "API key", secret: true }],
   higgsfield: [{ name: "keyId", label: "API key ID", secret: false }, { name: "keySecret", label: "API key secret", secret: true }],
   pinterest: [{ name: "accessToken", label: "Access token", secret: true }],
   unsplash: [{ name: "accessKey", label: "Access key", secret: true }],
   cloudflare: [{ name: "accountId", label: "Account ID", secret: false }, { name: "apiToken", label: "API token (Account › Workers Scripts › Edit)", secret: true }],
-  resend: [{ name: "apiKey", label: "API key", secret: true }, { name: "fromEmail", label: "From address (verified domain)", secret: false, placeholder: "hello@youragency.com" }],
+  resend: [{ name: "apiKey", label: "API key", secret: true }, { name: "fromEmail", label: "From address (verified domain)", secret: false, placeholder: "hello@youragency.com" }, { name: "webhookSecret", label: "Webhook signing secret (optional, for delivery and bounce tracking)", secret: true, placeholder: "whsec_…", optional: true }],
 };
 
 export function credentialFields(provider: string) {

@@ -104,3 +104,29 @@ export async function changeEmail(_p: ActionState, form: FormData): Promise<Acti
     return `Check ${email} for a confirmation link. Your sign-in email changes once you open it.`;
   });
 }
+
+const LiaSchema = z.object({
+  purpose: z.string().min(30, "Describe the purpose in a little more detail.").max(2000),
+  necessity: z.string().min(30, "Explain why email is necessary in a little more detail.").max(2000),
+  balancing: z.string().min(30, "Explain the balance with recipients' interests in a little more detail.").max(2000),
+  safeguards: z.string().min(10).max(2000),
+});
+
+/**
+ * Record the organisation's legitimate interests assessment (UK/EU GDPR). Emails relying on
+ * legitimate interests are blocked until one exists. Owners and administrators only.
+ */
+export async function saveLia(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("administrator", async (ctx) => {
+    const d = LiaSchema.parse({ purpose: str(form, "purpose"), necessity: str(form, "necessity"), balancing: str(form, "balancing"), safeguards: str(form, "safeguards") });
+    if (form.get("confirm") !== "on") throw new Error("Confirm that this reflects how you will use email.");
+    const { data: org, error } = await ctx.supabase.from("organisations").select("settings").eq("id", ctx.organisationId).single();
+    if (error) throw error;
+    const now = new Date();
+    const lia = { ...d, completed_at: now.toISOString(), completed_by: ctx.user.id, review_by: new Date(now.getTime() + 365 * 86400_000).toISOString() };
+    const { error: uErr } = await ctx.supabase.from("organisations").update({ settings: { ...((org.settings as Record<string, unknown>) ?? {}), lia } }).eq("id", ctx.organisationId);
+    if (uErr) throw uErr;
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "compliance.lia_recorded", entityType: "organisation", entityId: ctx.organisationId, data: { review_by: lia.review_by } });
+    return "Assessment saved. Re-check any blocked emails so they pick it up.";
+  }, ["/settings", "/emails"]);
+}

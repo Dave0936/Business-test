@@ -15,6 +15,7 @@ export async function connectIntegration(_p: ActionState, form: FormData): Promi
     const values: Record<string, string> = {};
     for (const f of fields) {
       const v = str(form, f.name);
+      if (!v && f.optional) continue;
       if (!v) throw new Error(`Enter the ${f.label.toLowerCase()}.`);
       if (v.length > 500) throw new Error(`${f.label} is too long.`);
       values[f.name] = v;

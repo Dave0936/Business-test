@@ -59,7 +59,7 @@ export async function getSecret(db: SupabaseClient, organisationId: string, key:
     case "cloudflare":
       return env.cloudflareApiToken && env.cloudflareAccountId ? { apiToken: env.cloudflareApiToken, accountId: env.cloudflareAccountId } : null;
     case "resend":
-      return env.resendApiKey && env.resendFromEmail ? { apiKey: env.resendApiKey, fromEmail: env.resendFromEmail } : null;
+      return env.resendApiKey && env.resendFromEmail ? { apiKey: env.resendApiKey, fromEmail: env.resendFromEmail, ...(env.resendWebhookSecret ? { webhookSecret: env.resendWebhookSecret } : {}) } : null;
     case "pinterest":
       return env.pinterestAccessToken ? { accessToken: env.pinterestAccessToken } : null;
     case "unsplash":

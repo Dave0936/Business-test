@@ -22,7 +22,7 @@ export class SendDeferredError extends Error {
  *  4. the organisation's daily sending limit;
  *  5. Resend idempotency key = the draft's idempotency key, so retries never double-send.
  */
-export async function sendApprovedEmail(db: SupabaseClient, organisationId: string, draftId: string) {
+export async function sendApprovedEmail(db: SupabaseClient, organisationId: string, draftId: string, opts: { actorId?: string | null; resend?: Pick<Resend, "emails"> } = {}) {
   const { data: d, error } = await db
     .from("email_drafts")
     .select("id, business_id, to_email, subject, body_text, status, approval_id, content_hash, idempotency_key, compliance, kind")
@@ -66,10 +66,12 @@ export async function sendApprovedEmail(db: SupabaseClient, organisationId: stri
   const { error: lockErr } = await db.from("email_drafts").update({ status: "sending" }).eq("id", draftId).in("status", ["approved", "failed"]);
   if (lockErr) throw new SendBlockedError(lockErr.message);
 
-  const unsubscribeUrl = (d.compliance as { unsubscribe_url?: string }).unsubscribe_url;
+  const stored = d.compliance as { unsubscribe_url?: string; unsubscribe_post_url?: string };
+  // One-click unsubscribe (RFC 8058) posts to the API address; the body links to the page.
+  const unsubscribeUrl = stored.unsubscribe_post_url ?? stored.unsubscribe_url;
   const replyTo = org?.inbound_reply_domain ? `replies+${draftId}@${org.inbound_reply_domain}` : org?.agency_reply_email ?? undefined;
   const fromName = org?.agency_name || org?.name || "WebOpportunity AI";
-  const resend = new Resend(creds.apiKey);
+  const resend = opts.resend ?? new Resend(creds.apiKey);
   const { data, error: sendErr } = await resend.emails.send(
     {
       from: `${fromName} <${creds.fromEmail}>`,
@@ -87,15 +89,15 @@ export async function sendApprovedEmail(db: SupabaseClient, organisationId: stri
   if (sendErr || !data?.id) {
     const msg = sendErr?.message ?? "Resend did not return a message id";
     await db.from("email_drafts").update({ status: "failed", last_error: msg }).eq("id", draftId);
-    await writeAudit(db, { organisationId, action: "email.send_failed", entityType: "email", entityId: draftId, data: { error: msg } });
+    await writeAudit(db, { organisationId, actorId: opts.actorId ?? null, action: "email.send_failed", entityType: "email", entityId: draftId, data: { error: msg } });
     throw new Error(`Resend error: ${msg}`);
   }
 
   const followUp = new Date(Date.now() + 6 * 86400_000).toISOString();
-  await db.from("email_drafts").update({ status: "sent", sent_at: new Date().toISOString(), provider_message_id: data.id, last_error: null, follow_up_at: followUp }).eq("id", draftId);
+  await db.from("email_drafts").update({ status: "sent", sent_at: new Date().toISOString(), provider_message_id: data.id, last_error: null, follow_up_at: followUp, sent_by: opts.actorId ?? null }).eq("id", draftId);
   await db.from("businesses").update({ status: "contacted", follow_up_at: followUp }).eq("id", d.business_id).eq("organisation_id", organisationId).in("status", ["awaiting_email_approval", "deployed", "qualified", "contacted"]);
-  await db.from("crm_activities").insert({ organisation_id: organisationId, business_id: d.business_id, type: "email_sent", summary: `Email sent to ${d.to_email}`, data: { draft_id: draftId, message_id: data.id } });
-  await writeAudit(db, { organisationId, action: "email.sent", entityType: "email", entityId: draftId, data: { message_id: data.id, approval_id: d.approval_id, to: d.to_email } });
+  await db.from("crm_activities").insert({ organisation_id: organisationId, business_id: d.business_id, type: "email_sent", summary: `Email sent to ${d.to_email}`, data: { draft_id: draftId, message_id: data.id }, actor_id: opts.actorId ?? null });
+  await writeAudit(db, { organisationId, actorId: opts.actorId ?? null, action: "email.sent", entityType: "email", entityId: draftId, data: { message_id: data.id, approval_id: d.approval_id, to: d.to_email } });
   return { status: "sent", messageId: data.id };
 }
 

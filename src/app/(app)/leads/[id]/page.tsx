@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { draftEmailAction } from "../../emails/actions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getOrgContext, canWrite } from "@/lib/auth";
@@ -53,7 +54,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             <ActionButton action={queueAction} hidden={{ ...hidden, type: "audit", force: "1" }} label={audit ? "Re-audit" : "Audit & score"} variant="outline" />
             <ActionButton action={queueAction} hidden={{ ...hidden, type: "research", force: "1" }} label={brief ? "Quick new brief" : "Quick brief"} variant="outline" />
             <ActionButton action={queueAction} hidden={{ ...hidden, type: "generate", force: site ? "1" : "" }} label={site ? "Regenerate prototype" : "Generate prototype"} variant="outline" confirm={site ? "This creates a new version and resets approval. Continue?" : undefined} />
-            {liveUrl && b.email && <ActionButton action={queueAction} hidden={{ ...hidden, type: "draft_email" }} label="Draft email" />}
+            {liveUrl && b.email && <ActionButton action={draftEmailAction} hidden={{ businessId: b.id }} label="Draft email" pendingLabel="Writing…" />}
             </>}
           </>
         )}
@@ -143,7 +144,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                     <Select id="subscriber_type" name="subscriber_type" defaultValue={b.subscriber_type}><option value="unknown">Unknown</option><option value="corporate">Corporate subscriber</option><option value="individual">Individual subscriber</option></Select>
                   </Field>
                   <Field label="Website" htmlFor="website_url"><Input id="website_url" name="website_url" type="url" defaultValue={b.website_url ?? ""} /></Field>
-                  <Field label="Public email" htmlFor="email" hint={b.email ? `Source: ${humanise(b.email_source)}` : undefined}><Input id="email" name="email" type="email" defaultValue={b.email ?? ""} /></Field>
+                  <Field label="Public email" htmlFor="email" hint={b.email ? `Source: ${humanise(b.email_source)}` : "Only an address the business publishes itself (its website, Google listing or social page). Never guess or buy addresses."}><Input id="email" name="email" type="email" defaultValue={b.email ?? ""} /></Field>
                   <Field label="Public phone" htmlFor="phone"><Input id="phone" name="phone" defaultValue={b.phone ?? ""} /></Field>
                   <Field label="Follow-up date" htmlFor="follow_up_at"><Input id="follow_up_at" name="follow_up_at" type="date" defaultValue={b.follow_up_at?.slice(0, 10) ?? ""} /></Field>
                   <Field label="Estimated value" htmlFor="estimated_value" hint="An estimate, not revenue."><Input id="estimated_value" name="estimated_value" type="number" min={0} defaultValue={b.estimated_value ?? ""} /></Field>

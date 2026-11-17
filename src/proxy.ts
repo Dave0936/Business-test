@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * visitors to /login. Authorisation itself is enforced by RLS and server checks;
  * this is only a convenience redirect.
  */
-const PUBLIC = [/^\/login/, /^\/privacy/, /^\/api\/preview\/[0-9a-f-]{36}\/~\d{10}\.[0-9a-f]{64}\//, /^\/auth\//, /^\/setup/, /^\/u\//, /^\/api\/webhooks\//, /^\/api\/cron\//, /^\/api\/health/, /^\/api\/places\//];
+const PUBLIC = [/^\/login/, /^\/privacy/, /^\/api\/preview\/[0-9a-f-]{36}\/~\d{10}\.[0-9a-f]{64}\//, /^\/auth\//, /^\/setup/, /^\/u\//, /^\/api\/webhooks\//, /^\/api\/unsubscribe\//, /^\/api\/cron\//, /^\/api\/health/, /^\/api\/places\//];
 
 export async function proxy(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

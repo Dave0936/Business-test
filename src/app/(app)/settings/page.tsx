@@ -12,10 +12,18 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { COUNTRIES, humanise } from "@/lib/industries";
 import { formatDate } from "@/lib/utils";
-import { changeEmail, changePassword, changeRole, inviteMember, removeMember, saveOrganisation } from "./actions";
+import { changeEmail, changePassword, changeRole, inviteMember, removeMember, saveLia, saveOrganisation } from "./actions";
 import { removeDemoData } from "../overview/actions";
 
 export const metadata: Metadata = { title: "Settings" };
+
+// Starting points for the assessment; the agency edits them to describe what it actually does.
+const LIA_DEFAULTS = {
+  purpose: "To offer our web design services to local businesses whose websites are missing or could be improved, by sending each one a single short email with an independent website concept made for them.",
+  necessity: "Email to the address the business publishes for enquiries is the least intrusive way to share a website concept, which needs a link. We send one introduction and at most one gentle follow-up, and only to businesses where we found a specific, verifiable problem.",
+  balancing: "The message is relevant to the recipient's business role, sent to a published business address, and clearly identifies us. It does not use sensitive data. Recipients can reasonably expect occasional relevant business offers and can opt out at once; we never send to sole traders or other individual subscribers without consent where the law requires it.",
+  safeguards: "Every email is approved by a person before sending; one-click unsubscribe and immediate suppression; bounces and complaints suppress the address; no bought or guessed addresses; daily sending limit; records kept of the source of each address.",
+};
 
 const ROLES = ["owner", "administrator", "staff", "read_only"] as const;
 
@@ -28,6 +36,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     ctx.supabase.from("audit_logs").select("id, action, entity_type, created_at, actor_type, users(email)").eq("organisation_id", ctx.organisationId).order("created_at", { ascending: false }).limit(40),
   ]);
   const admin = canApprove(ctx.role);
+  const lia = ((org.settings ?? {}) as { lia?: { purpose?: string; necessity?: string; balancing?: string; safeguards?: string; completed_at?: string; review_by?: string } }).lia;
   const owner = ctx.role === "owner";
 
   return (
@@ -37,6 +46,23 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <Alert variant="success" className="mb-5"><AlertTitle>Workspace created</AlertTitle><AlertDescription>Add your agency details next. They identify you in every prototype and email footer.</AlertDescription></Alert>
       )}
       <div className="grid gap-5 xl:grid-cols-2">
+        <Card className="xl:col-span-2" data-testid="lia-card">
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center gap-2">Legitimate interests assessment {lia?.completed_at ? <Badge variant="success">Recorded {formatDate(lia.completed_at)}</Badge> : <Badge variant="warning">Not recorded</Badge>}</CardTitle>
+            <CardDescription>UK and EU GDPR: emails sent under legitimate interests are blocked until you record why the outreach is justified. Edit the suggested text so it describes what you actually do. Review it at least once a year{lia?.review_by ? ` (next by ${formatDate(lia.review_by)})` : ""}. This is not legal advice.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ActionForm action={saveLia} submitLabel={lia?.completed_at ? "Update assessment" : "Record assessment"} disabled={!admin}>
+              <div className="grid gap-3 lg:grid-cols-2">
+                <Field label="1. Purpose: what is the legitimate interest?" htmlFor="lia-purpose"><Textarea id="lia-purpose" name="purpose" rows={4} defaultValue={lia?.purpose ?? LIA_DEFAULTS.purpose} /></Field>
+                <Field label="2. Necessity: why is email needed for it?" htmlFor="lia-necessity"><Textarea id="lia-necessity" name="necessity" rows={4} defaultValue={lia?.necessity ?? LIA_DEFAULTS.necessity} /></Field>
+                <Field label="3. Balance: why don't recipients' interests override it?" htmlFor="lia-balancing"><Textarea id="lia-balancing" name="balancing" rows={4} defaultValue={lia?.balancing ?? LIA_DEFAULTS.balancing} /></Field>
+                <Field label="Safeguards" htmlFor="lia-safeguards"><Textarea id="lia-safeguards" name="safeguards" rows={4} defaultValue={lia?.safeguards ?? LIA_DEFAULTS.safeguards} /></Field>
+              </div>
+              <label className="flex items-start gap-2 text-sm"><input type="checkbox" name="confirm" className="mt-0.5 size-4" /> This describes how we will use email outreach, and we will follow it.</label>
+            </ActionForm>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader><CardTitle>Agency profile</CardTitle><CardDescription>Shown on concept sites and required in marketing emails (sender identity and postal address).</CardDescription></CardHeader>
           <CardContent>
