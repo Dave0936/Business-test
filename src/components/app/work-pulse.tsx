@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { continueWork } from "@/app/(app)/work-actions";
 
 /**
  * Keeps queued searches, audits and other work moving while the app is open, and shows
@@ -34,7 +33,9 @@ export function WorkPulse({ initialPending, canProcess }: { initialPending: numb
       }
       busy.current = true;
       try {
-        const r = await continueWork();
+        const res = await fetch("/api/work", { method: "POST", cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const r = (await res.json()) as { queued: number; running: number; nextInSeconds: number | null; processed: number };
         if (stopped) return;
         setPending(r.queued + r.running);
         if (r.processed > 0) router.refresh();
