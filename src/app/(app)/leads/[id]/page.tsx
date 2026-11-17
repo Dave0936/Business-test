@@ -45,12 +45,16 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       <PageHeader
         title={b.name}
         description={<span className="flex flex-wrap items-center gap-2">{industryById(b.industry_id)?.label ?? b.category ?? "Business"} · {b.city ?? "—"}, {b.country_code} <StatusBadge status={b.status} /> <DemoBadge show={b.is_demo} /></span>}
-        actions={writable && (
+        actions={(
           <>
+            <Link href={`/design-research/${id}`} className="inline-flex h-8 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90">Design studio</Link>
+            {site && <Link href={`/builder/${site.id}`} className="inline-flex h-8 items-center rounded-md border px-3 text-sm hover:bg-muted">Open prototype</Link>}
+            {writable && <>
             <ActionButton action={queueAction} hidden={{ ...hidden, type: "audit", force: "1" }} label={audit ? "Re-audit" : "Audit & score"} variant="outline" />
-            <ActionButton action={queueAction} hidden={{ ...hidden, type: "research", force: "1" }} label={brief ? "New design brief" : "Research design"} variant="outline" />
+            <ActionButton action={queueAction} hidden={{ ...hidden, type: "research", force: "1" }} label={brief ? "Quick new brief" : "Quick brief"} variant="outline" />
             <ActionButton action={queueAction} hidden={{ ...hidden, type: "generate", force: site ? "1" : "" }} label={site ? "Regenerate prototype" : "Generate prototype"} variant="outline" confirm={site ? "This creates a new version and resets approval. Continue?" : undefined} />
             {liveUrl && b.email && <ActionButton action={queueAction} hidden={{ ...hidden, type: "draft_email" }} label="Draft email" />}
+            </>}
           </>
         )}
       />
@@ -86,7 +90,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             <CardContent className="space-y-3 text-sm">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="w-28 text-muted-foreground">Design brief</span>
-                {brief ? <><Link className="text-primary hover:underline" href={`/design-research/${id}`}>View brief</Link><span className="text-xs text-muted-foreground">({brief.generated_by === "ai" ? "AI" : "sector preset"}, {refs?.length ?? 0} references)</span></> : <span className="text-muted-foreground">None</span>}
+                {brief ? <><Link className="text-primary hover:underline" href={`/design-research/${id}`}>Open in design studio</Link><span className="text-xs text-muted-foreground">({brief.generated_by === "ai" ? "AI" : brief.generated_by === "manual" ? "edited" : "sector preset"}, {refs?.length ?? 0} references)</span></> : <Link className="text-primary hover:underline" href={`/design-research/${id}`}>None yet: open the design studio</Link>}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="w-28 text-muted-foreground">Prototype</span>
