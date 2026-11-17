@@ -20,7 +20,11 @@ export async function connectIntegration(_p: ActionState, form: FormData): Promi
       values[f.name] = v;
     }
     const check = await verifyCredential(provider, values);
-    if (!check.ok) throw new Error(`Not saved: ${check.detail}`);
+    if (!check.ok) {
+      // Record why (never the key) so a failed connection can be diagnosed later.
+      await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "integration.connect_failed", data: { provider, reason: check.detail.slice(0, 300) } });
+      throw new Error(`Not saved: ${check.detail}`);
+    }
     const { error } = await ctx.supabase.rpc("save_integration", {
       p_org: ctx.organisationId, p_provider: provider, p_ciphertext: encryptSecret(JSON.stringify(values)),
       p_config: { ...(check.config ?? {}), detail: check.detail }, p_status: "connected",

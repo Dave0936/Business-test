@@ -30,7 +30,11 @@ export async function verifyCredential(provider: string, c: Record<string, strin
       case "serpapi": {
         const r = await get(`https://serpapi.com/account.json?api_key=${encodeURIComponent(c.apiKey)}`);
         const j = (await r.json().catch(() => ({}))) as { error?: string; plan_name?: string; total_searches_left?: number; account_email?: string };
-        if (!r.ok || j.error) return { ok: false, detail: j.error ?? `SerpAPI answered ${r.status}` };
+        if (!r.ok || j.error) {
+          const e = j.error ?? `SerpAPI answered ${r.status}`;
+          const hint = /invalid api key/i.test(e) ? " Copy the \"Private API Key\" from serpapi.com/manage-api-key (64 characters)." : /verif|confirm/i.test(e) ? " Finish verifying your SerpAPI account (email or phone), then try again." : "";
+          return { ok: false, detail: `${e}${hint}` };
+        }
         return { ok: true, detail: `${j.plan_name ?? "SerpAPI"}: ${j.total_searches_left ?? "?"} searches left`, config: { plan: j.plan_name ?? "", searchesLeft: String(j.total_searches_left ?? "") } };
       }
       case "google_places": {
