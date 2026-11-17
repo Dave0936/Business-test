@@ -8,10 +8,20 @@ import type { SiteFiles } from "@/lib/sites/spec";
  * allow-same-origin, and served with a strict CSP, so generated code can never
  * read the app's cookies or call its APIs.
  */
+/**
+ * The preview runs sandboxed (opaque origin). Safari treats 'self' in such a document as
+ * matching nothing, which blocks the page's own stylesheet, script and fonts, so the app's
+ * origin is named explicitly instead.
+ */
+function previewCsp(origin: string): string {
+  const o = /^https?:\/\/[a-z0-9.:-]+$/i.test(origin) ? origin : "'self'";
+  return `default-src ${o}; img-src ${o} https://images.unsplash.com data:; style-src ${o} https://fonts.googleapis.com; font-src ${o} https://fonts.gstatic.com; script-src ${o}; form-action 'none'; base-uri ${o}; object-src 'none'; frame-ancestors 'self'; sandbox allow-scripts allow-forms`;
+}
+
 const TOKEN_RE = /^~\d{10}\.[0-9a-f]{64}$/;
 const TYPES: Record<string, string> = { woff2: "font/woff2", html: "text/html; charset=utf-8", css: "text/css; charset=utf-8", js: "text/javascript; charset=utf-8", svg: "image/svg+xml", txt: "text/plain; charset=utf-8" };
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ versionId: string; path?: string[] }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ versionId: string; path?: string[] }> }) {
   const { versionId, path } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(versionId)) return new NextResponse("Not found", { status: 404 });
   const supabase = await createUserClient();
@@ -43,7 +53,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ver
   return new NextResponse(body, {
     headers: {
       "content-type": typeof f === "string" ? TYPES[ext] ?? "application/octet-stream" : f.contentType,
-      "content-security-policy": "default-src 'self'; img-src 'self' https://images.unsplash.com data:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; form-action 'none'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; sandbox allow-scripts allow-forms",
+      "content-security-policy": previewCsp(new URL(req.url).origin),
       "x-robots-tag": "noindex",
       "cache-control": "private, max-age=0, no-store",
       "x-content-type-options": "nosniff",
