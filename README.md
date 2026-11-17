@@ -70,7 +70,7 @@ invites) appear in Inbucket at http://127.0.0.1:54324.
 openssl rand -base64 32
 ```
 
-Put the output in `APP_ENCRYPTION_KEY`.
+Put the output in `APP_ENCRYPTION_KEY`. Any random value of at least 32 characters also works (for example a 64-character hex secret); the app derives the AES-256 key from it. Keep it unchanged once keys are stored, or they can no longer be read.
 
 ### 5. Run
 

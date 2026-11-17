@@ -1,13 +1,27 @@
 import "server-only";
-import { createCipheriv, createDecipheriv, createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes, timingSafeEqual } from "node:crypto";
 import { env } from "@/lib/env";
 
 /** AES-256-GCM for integration secrets stored per organisation. Format: v1.<iv>.<tag>.<ciphertext> (base64url). */
 function key(): Buffer {
   if (!env.encryptionKey) throw new Error("APP_ENCRYPTION_KEY is not set; cannot store integration secrets.");
-  const raw = Buffer.from(env.encryptionKey, "base64");
-  if (raw.length !== 32) throw new Error("APP_ENCRYPTION_KEY must be 32 bytes, base64-encoded (openssl rand -base64 32).");
-  return raw;
+  return parseEncryptionKey(env.encryptionKey);
+}
+
+/**
+ * The AES-256 key from APP_ENCRYPTION_KEY. Accepts a 32-byte key as base64, base64url or hex
+ * (used as it is), or any other random value of at least 32 characters, from which a key is
+ * derived with HKDF-SHA256. Surrounding quotes and whitespace from copy and paste are ignored.
+ */
+export function parseEncryptionKey(value: string): Buffer {
+  const v = value.trim().replace(/^["']|["']$/g, "").trim();
+  if (/^[0-9a-f]{64}$/i.test(v)) return Buffer.from(v, "hex");
+  if (/^[A-Za-z0-9+/_-]{43}={0,1}$/.test(v)) {
+    const raw = Buffer.from(v.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+    if (raw.length === 32) return raw;
+  }
+  if (v.length < 32) throw new Error("APP_ENCRYPTION_KEY is too short: use at least 32 random characters (for example: openssl rand -base64 32).");
+  return Buffer.from(hkdfSync("sha256", Buffer.from(v, "utf8"), Buffer.from("webopportunity-ai"), Buffer.from("integration-secrets-v1"), 32));
 }
 
 export function encryptSecret(plaintext: string): string {
