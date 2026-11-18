@@ -64,7 +64,8 @@ export interface RunAgentOptions<S extends z.ZodType> {
   organisationId: string;
   db: SupabaseClient;
   system: string;
-  prompt: string;
+  /** Text, or text and pictures (for agents that look at design references). */
+  prompt: string | Anthropic.Beta.BetaContentBlockParam[];
   schema: S;
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
   maxTokens?: number;

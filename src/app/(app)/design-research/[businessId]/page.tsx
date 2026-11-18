@@ -26,6 +26,7 @@ import { BriefEditor } from "./brief-editor";
 import {
   addSiteAction, answersAction, briefAction, collectPinsAction, discoverSitesAction, pickAction, questionsAction, saveStudioSetup, uploadAction,
   saveCreativeBriefAction,
+  writeCreativeBriefAction,
 } from "../studio-actions";
 import { buildSiteAction } from "../../builder/actions";
 
@@ -113,9 +114,19 @@ export default async function StudioPage({ params }: { params: Promise<{ busines
             <CardDescription>Your own design direction for this site, as long as you like: creative direction, palette, typography, page sections, motion. The builder treats it as the main brief. Facts we haven&apos;t verified (menus, prices, opening hours, social links) appear as marked placeholders, never invented. Upload screenshots of sites you admire under &ldquo;Upload a picture&rdquo;: the builder sees them.</CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <ActionButton action={writeCreativeBriefAction} hidden={hidden} label={(studio as { creative_brief?: string | null } | null)?.creative_brief ? "Rewrite it from my loved references" : "Write it from my loved references"} pendingLabel="Studying your references…" disabled={!editable || status.anthropic.mode !== "live"} confirm={(studio as { creative_brief?: string | null } | null)?.creative_brief ? "Replace the current creative brief with a new one written from your loved references? Copy anything you want to keep first." : undefined} />
+              <span className="text-xs text-muted-foreground" data-testid="creative-brief-by">
+                {(() => {
+                  const st = studio as { creative_brief?: string | null; creative_brief_by?: string | null; creative_brief_at?: string | null } | null;
+                  if (!st?.creative_brief) return `Claude looks at the actual pictures you loved (${loved} loved so far) and writes a detailed brief: the look, every section, what to take from each reference.`;
+                  return `${st.creative_brief_by === "ai" ? "Written by Claude from your references" : "Written by your team"}${st.creative_brief_at ? `, ${new Date(st.creative_brief_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })}` : ""}.`;
+                })()}
+              </span>
+            </div>
             <ActionForm action={saveCreativeBriefAction} submitLabel="Save creative brief" disabled={!editable}>
               <input type="hidden" name="businessId" value={businessId} />
-              <Textarea name="creativeBrief" rows={10} maxLength={20000} defaultValue={(studio as { creative_brief?: string | null } | null)?.creative_brief ?? ""} placeholder="For example: a bold, editorial look led by oversized condensed type and a strong mid blue, with asymmetric image and text panels and a scrolling ticker…" aria-label="Creative brief" />
+              <Textarea key={(studio as { creative_brief_at?: string | null } | null)?.creative_brief_at ?? "none"} name="creativeBrief" rows={18} maxLength={20000} defaultValue={(studio as { creative_brief?: string | null } | null)?.creative_brief ?? ""} placeholder="For example: a bold, editorial look led by oversized condensed type and a strong mid blue, with asymmetric image and text panels and a scrolling ticker…" aria-label="Creative brief" />
             </ActionForm>
           </CardContent>
         </Card>

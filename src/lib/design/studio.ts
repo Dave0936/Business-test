@@ -5,6 +5,8 @@ import { boardPinsPage, searchPins, type PinRef } from "@/lib/providers/design/p
 import { industryById, inferIndustryId } from "@/lib/industries";
 import { aiAvailable, monthToDateSpend, runWebSearch } from "@/lib/ai/client";
 import { runDesignAgent } from "@/lib/ai/agents/design-agent";
+import { runCreativeBriefAgent } from "@/lib/ai/agents/creative-agents";
+import { chooseReferences, pictureBlocks, referencePictures, refLabel } from "./reference-images";
 import { RESEARCH_SEARCH_SYSTEM, runJudgeAgent, runQuestionsAgent, runResearchPickAgent, type RefSummary } from "@/lib/ai/agents/studio-agents";
 import { chooseResearchHits, RESEARCH_BLOCKED_DOMAINS } from "./research-rules";
 import { describeFetchError, safeFetch, assertSafeUrl } from "@/lib/security/safe-fetch";
@@ -32,6 +34,9 @@ export interface Studio {
   questions_by: "ai" | "preset" | null;
   pinterest_bookmark: string | null;
   languages?: string[];
+  creative_brief?: string | null;
+  creative_brief_by?: "ai" | "person" | null;
+  creative_brief_at?: string | null;
 }
 
 export interface StudioBusiness {
@@ -331,6 +336,40 @@ export async function saveAnswers(db: SupabaseClient, studio: Studio, answers: R
 // Briefs
 // ---------------------------------------------------------------------------
 
+/**
+ * Venari's method: a creative director looks at the actual pictures of the references our
+ * designer loved (and the picks), with the idea and answers, and writes a long, specific
+ * creative brief. Saved in the studio, where the designer can read and edit it.
+ */
+export async function writeCreativeBrief(db: SupabaseClient, org: string, business: StudioBusiness, studio: Studio, actorId: string | null): Promise<{ studio: Studio; pictures: number }> {
+  if (!aiAvailable()) throw new Error("Claude is not connected, so it can't write the creative brief. Write your own in the box instead.");
+  const industry = industryById(business.industry_id);
+  const refs = await loadReferences(db, org, business);
+  const chosen = chooseReferences(refs, studio.picks.map((p) => p.reference_id), 6);
+  const pictures = await referencePictures(db, org, chosen, 6);
+  const pickBy = new Map(studio.picks.map((p) => [p.reference_id, p]));
+  const answered = studio.questions.filter((q) => q.answer);
+  const { data: facts } = await db.from("businesses").select("phone, email, address, website_url").eq("id", business.id).eq("organisation_id", org).single();
+  const { data: audit } = await db.from("website_audits").select("problems").eq("business_id", business.id).eq("organisation_id", org).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const context = [
+    `Business: ${business.name}, ${industry?.label ?? business.category ?? "local business"}${business.city ? ` in ${business.city}` : ""} (${business.country_code}).`,
+    `Verified facts we can show: phone ${facts?.phone ? "yes" : "no"}, email ${facts?.email ? "yes" : "no"}, address ${facts?.address ? "yes" : "no"}. Nothing else about the business is verified.`,
+    `What we are making: ${SITE_TYPES[studio.site_type].label} (sections usually: ${SITE_TYPES[studio.site_type].sections.join(", ")}).`,
+    studio.idea ? `Our designer's idea, in their words: ${studio.idea}` : "",
+    answered.length ? `Our designer's answers:\n${answered.map((q) => `- ${q.question} ${q.answer}`).join("\n")}` : "",
+    studio.creative_brief_by === "person" && studio.creative_brief?.trim() ? `Our designer's own notes (keep what they ask for):\n${studio.creative_brief.trim().slice(0, 6000)}` : "",
+    audit?.problems ? `What is weak about their current website (from our audit): ${((audit.problems as { title: string }[]) ?? []).slice(0, 6).map((p) => p.title).join("; ")}.` : "",
+  ].filter(Boolean).join("\n\n");
+  const blocks = pictureBlocks(pictures, (ref) => {
+    const pick = pickBy.get(ref.id);
+    return `${refLabel(ref)}${pick ? `; picked for the ${pick.section}: ${pick.reason}` : ""}.`;
+  });
+  const r = await runCreativeBriefAgent({ db, organisationId: org, context, pictures: blocks });
+  const updated = await updateStudio(db, studio, { creative_brief: r.output.markdown, creative_brief_by: "ai", creative_brief_at: new Date().toISOString() });
+  await db.from("crm_activities").insert({ organisation_id: org, business_id: business.id, type: "creative_brief", summary: `Creative brief written by Claude from ${pictures.length} reference picture${pictures.length === 1 ? "" : "s"}`, data: { pictures: pictures.length }, actor_id: actorId });
+  return { studio: updated, pictures: pictures.length };
+}
+
 export async function produceStudioBrief(db: SupabaseClient, org: string, business: StudioBusiness, studio: Studio, actorId: string | null, opts: { forcePreset?: boolean } = {}): Promise<{ briefId: string; generatedBy: "ai" | "demo"; adjustments: string[]; applied: string[] }> {
   const industry = industryById(business.industry_id);
   const refs = await loadReferences(db, org, business);
@@ -343,6 +382,10 @@ export async function produceStudioBrief(db: SupabaseClient, org: string, busine
 
   let brief: DesignBrief;
   let generatedBy: "ai" | "demo";
+  if (aiAvailable() && !opts.forcePreset && !studio.creative_brief?.trim()) {
+    // No creative brief yet: write one from the loved pictures first, so the brief follows it.
+    studio = (await writeCreativeBrief(db, org, business, studio, actorId)).studio;
+  }
   if (aiAvailable() && !opts.forcePreset) {
     const auditSummary = audit ? [`Current site score: ${audit.audit_score ?? "no site"}`, ...((audit.problems as { title: string; detail: string }[]) ?? []).slice(0, 8).map((p) => `- ${p.title}: ${p.detail}`)].join("\n") : "";
     const chosen = studio.picks.map((p) => byId.get(p.reference_id)).filter(Boolean) as ReferenceRow[];
@@ -353,6 +396,7 @@ export async function produceStudioBrief(db: SupabaseClient, org: string, busine
       industryLabel: industry?.label ?? business.category ?? "local business", auditSummary,
       references: pool.map((x) => ({ id: x.id, source: x.source, title: x.title, url: x.storage_path ? "(uploaded picture)" : x.url, notes: x.analysis?.notes ?? null })),
       studio: { idea: studio.idea, siteTypeLabel: SITE_TYPES[studio.site_type].label, picks: studio.picks, answers: answered.map((q) => ({ question: q.question, answer: q.answer! })), loved: loved.map((x) => x.id), rejected: refs.filter((x) => x.verdict === "rejected").map((x) => x.id) },
+      creativeBrief: studio.creative_brief ?? null,
     });
     brief = r.output;
     generatedBy = "ai";

@@ -35,7 +35,7 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
   const biz = site.businesses as unknown as { id: string; name: string; is_demo: boolean };
   const [{ data: versions }, { data: builds }, { data: current }, { data: qa }, status] = await Promise.all([
     db.from("website_versions").select("id, version, generated_by, change_note, created_at, spec->kind").eq("website_id", id).order("version", { ascending: false }).limit(30),
-    db.from("site_builds").select("id, kind, status, instruction, turns, cost_usd, activity, error, summary, suggestions, created_at, finished_at").eq("website_id", id).order("created_at", { ascending: false }).limit(5),
+    db.from("site_builds").select("id, kind, status, instruction, turns, cost_usd, activity, error, summary, suggestions, created_at, finished_at, direction, direction_summary").eq("website_id", id).order("created_at", { ascending: false }).limit(5),
     site.current_version_id ? db.from("website_versions").select("id, version, spec, files, generated_by").eq("id", site.current_version_id).single() : Promise.resolve({ data: null }),
     site.current_version_id ? db.from("quality_reports").select("passed, checks, created_at").eq("version_id", site.current_version_id).order("created_at", { ascending: false }).limit(1).maybeSingle() : Promise.resolve({ data: null }),
     integrationStatus(db, ctx.organisationId),
@@ -157,7 +157,15 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
             {builds && builds.length > 0 && !active && lastDone && (
               <Card>
                 <CardHeader><CardTitle>Last build</CardTitle><CardDescription>{lastDone.turns} steps · ${Number(lastDone.cost_usd).toFixed(2)}</CardDescription></CardHeader>
-                <CardContent><Activity items={lastDone.activity as { at: string; text: string }[]} /></CardContent>
+                <CardContent className="space-y-3">
+                  {lastDone.direction && (
+                    <details className="rounded-md border p-3 text-sm" data-testid="direction">
+                      <summary className="cursor-pointer font-medium">Art direction{lastDone.direction_summary ? `: ${lastDone.direction_summary}` : ""}</summary>
+                      <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap font-sans text-xs leading-relaxed text-muted-foreground">{lastDone.direction}</pre>
+                    </details>
+                  )}
+                  <Activity items={lastDone.activity as { at: string; text: string }[]} />
+                </CardContent>
               </Card>
             )}
           </div>

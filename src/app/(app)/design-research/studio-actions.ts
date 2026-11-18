@@ -4,7 +4,7 @@ import { guarded, str, type ActionState } from "@/lib/actions";
 import { writeAudit } from "@/lib/audit-log";
 import {
   addSiteReference, addUploadReference, collectPins, discoverSites, getOrCreateStudio, loadBusiness, pickReferences,
-  prepareQuestions, produceStudioBrief, saveAnswers, saveEditedBrief, setVerdict, updateStudio,
+  prepareQuestions, produceStudioBrief, saveAnswers, saveEditedBrief, setVerdict, updateStudio, writeCreativeBrief,
 } from "@/lib/design/studio";
 import { MAX_EXTRA_LANGUAGES, SITE_LANGUAGES, SITE_TYPE_IDS } from "@/lib/design/studio-rules";
 import { FONT_CHOICES } from "@/lib/design/brief";
@@ -170,9 +170,20 @@ export async function saveCreativeBriefAction(_p: ActionState, form: FormData): 
     const { studio } = await open(ctx, form);
     const text = String(form.get("creativeBrief") ?? "").replace(/\r\n/g, "\n").trim();
     if (text.length > 20000) throw new Error("Keep the creative brief under 20,000 characters.");
-    const { error } = await ctx.supabase.from("design_studios").update({ creative_brief: text || null }).eq("id", studio.id).eq("organisation_id", ctx.organisationId);
+    const { error } = await ctx.supabase.from("design_studios").update({ creative_brief: text || null, creative_brief_by: text ? "person" : null, creative_brief_at: new Date().toISOString() }).eq("id", studio.id).eq("organisation_id", ctx.organisationId);
     if (error) throw error;
     await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "design.creative_brief_saved", entityType: "business", entityId: id, data: { length: text.length } });
     return text ? "Saved. The next build or revision follows it." : "Cleared.";
+  }, path(id));
+}
+
+/** Claude looks at the loved references (the actual pictures) and writes the creative brief. */
+export async function writeCreativeBriefAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  const id = str(form, "businessId");
+  return guarded("staff", async (ctx) => {
+    const { business, studio } = await open(ctx, form);
+    const r = await writeCreativeBrief(ctx.supabase, ctx.organisationId, business, studio, ctx.user.id);
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "design.creative_brief_written", entityType: "business", entityId: id, data: { pictures: r.pictures } });
+    return r.pictures ? `Written from ${r.pictures} reference picture${r.pictures === 1 ? "" : "s"}. Read it, edit anything, then build.` : "Written without reference pictures (none loved yet). Love some references and write it again for a brief led by them.";
   }, path(id));
 }
