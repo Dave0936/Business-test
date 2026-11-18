@@ -1,6 +1,7 @@
 import { runQaChecks } from "@/lib/qa/checks";
 import type { SiteSpec } from "../spec";
 import { assembleBespoke, type AssembleContext } from "./assemble";
+import { referencedVendor } from "../vendor";
 import type { CheckOutcome } from "./tools";
 
 /** The check Claude runs: assemble exactly as published, then the full quality checks. */
@@ -9,6 +10,8 @@ export function makeChecker(assemble: AssembleContext, spec: SiteSpec, localAsse
     const { files } = assembleBespoke(source, assemble);
     // Bundled photos are added when the version is saved; count them as present here.
     for (const a of localAssets) files[a] = { base64: "", contentType: "image/png" };
+    // Linked animation libraries are bundled when the version is saved.
+    for (const v of referencedVendor(files)) files[v] = "/* bundled animation library */";
     const report = runQaChecks(files, spec, { verified: { phone: assemble.facts.phone, email: assemble.facts.email, name: assemble.facts.name }, agencyName: assemble.agencyName });
     return {
       passed: report.passed,

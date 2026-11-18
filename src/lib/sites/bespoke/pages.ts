@@ -45,6 +45,9 @@ export function stubPage(indexHtml: string, page: PlannedPage): string {
   const lang = $("html").attr("lang") || "en";
   const header = $("header").first().length ? $.html($("header").first()) : `<header><a href="index.html">{{BUSINESS_NAME}}</a></header>`;
   const footer = $("footer").first().length ? $.html($("footer").first()) : "";
+  // Keep the homepage's bundled animation libraries, so script.js behaves the same here.
+  const vendorCss = $('link[href^="vendor/"]').toArray().map((el) => `<link rel="stylesheet" href="${esc($(el).attr("href") ?? "")}">`).join("\n");
+  const vendorJs = $('script[src^="vendor/"]').toArray().map((el) => `<script src="${esc($(el).attr("src") ?? "")}" defer></script>`).join("\n");
   return `<!doctype html>
 <html lang="${esc(lang)}">
 <head>
@@ -54,6 +57,7 @@ export function stubPage(indexHtml: string, page: PlannedPage): string {
 <meta name="description" content="${esc(page.label)} for {{BUSINESS_NAME}}. This page is built once the homepage is agreed.">
 <meta property="og:title" content="${esc(page.label)} · {{BUSINESS_NAME}}">
 <link rel="stylesheet" href="styles.css">
+${vendorCss}
 </head>
 <body ${STUB_MARKER}>
 <a class="skip" href="#main">Skip to content</a>
@@ -65,6 +69,7 @@ ${header}
 </section>
 </main>
 ${footer}
+${vendorJs}
 <script src="script.js" defer></script>
 </body>
 </html>

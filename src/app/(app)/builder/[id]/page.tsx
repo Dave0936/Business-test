@@ -15,7 +15,7 @@ import type { QaCheck } from "@/lib/qa/checks";
 import type { SiteFiles, SiteSpec } from "@/lib/sites/spec";
 import { formatDate } from "@/lib/utils";
 import { PreviewFrame } from "./preview-frame";
-import { buildRestAction, buildSiteAction, restoreVersion, reviseSiteAction, stopBuildAction } from "../actions";
+import { buildRestAction, buildSiteAction, restoreVersion, reviseMotionAction, reviseSiteAction, stopBuildAction } from "../actions";
 import { recheckWebsiteAction } from "../../approvals/actions";
 import { DECISION_LABEL, notReadyReason, type Decision } from "@/lib/approvals/review";
 
@@ -143,6 +143,26 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
                       <input type="hidden" name="websiteId" value={id} />
                       <Textarea name="instruction" rows={3} maxLength={2000} placeholder="For example: make the hero calmer with more white space, and move the booking form higher." aria-label="Change to make" required />
                     </ActionForm>
+                  )}
+                  {editable && (
+                    <div className="space-y-2 border-t pt-3" data-testid="motion-form">
+                      <p className="text-xs font-medium">Add motion</p>
+                      <p className="text-xs text-muted-foreground">Animates this version without changing its words or layout. Motion is switched off for visitors who ask their device for less motion.</p>
+                      <ActionForm action={reviseMotionAction} submitLabel="Add motion" disabled={!aiLive || Boolean(active)}>
+                        <input type="hidden" name="websiteId" value={id} />
+                        <fieldset className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                          <legend className="sr-only">What should move</legend>
+                          <label className="flex items-center gap-1.5"><input type="checkbox" name="area" value="hero" defaultChecked /> First screen</label>
+                          <label className="flex items-center gap-1.5"><input type="checkbox" name="area" value="scroll" defaultChecked /> On scroll</label>
+                          <label className="flex items-center gap-1.5"><input type="checkbox" name="area" value="hover" /> Hover</label>
+                        </fieldset>
+                        <fieldset className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                          <legend className="sr-only">Strength</legend>
+                          <label className="flex items-center gap-1.5"><input type="radio" name="strength" value="subtle" defaultChecked /> Subtle</label>
+                          <label className="flex items-center gap-1.5"><input type="radio" name="strength" value="bold" /> Bold</label>
+                        </fieldset>
+                      </ActionForm>
+                    </div>
                   )}
                 </CardContent>
               </Card>

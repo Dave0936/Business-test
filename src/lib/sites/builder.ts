@@ -12,6 +12,7 @@ import { demoContent } from "./demo-content";
 import { withSelfHostedFonts } from "./fonts-server";
 import { generatedImagesFor } from "./generated-images";
 import { compressPhoto } from "./image-compress";
+import { withVendor } from "./vendor-server";
 import { imageQueries, renderSite } from "./render";
 import { unsplashSearch } from "./images";
 import type { ResolvedImage, SiteFiles, SiteSpec, Theme } from "./spec";
@@ -107,7 +108,8 @@ export async function qaVersion(db: SupabaseClient, spec: SiteSpec, files: SiteF
  */
 export async function saveVersion(db: SupabaseClient, args: { organisationId: string; websiteId: string; businessId: string; spec: SiteSpec; note: string; actorId?: string | null; files?: SiteFiles }): Promise<{ versionId: string; report: QaReport; approvable: boolean }> {
   // Fonts are bundled with the site, so published concepts never load Google Fonts.
-  const files = withSelfHostedFonts(args.files ? await withUploads(db, args.spec, args.files) : await buildFiles(db, args.spec));
+  // Fonts and any animation libraries the pages link are bundled with the site.
+  const files = withVendor(withSelfHostedFonts(args.files ? await withUploads(db, args.spec, args.files) : await buildFiles(db, args.spec)));
   const { data: last } = await db.from("website_versions").select("version").eq("website_id", args.websiteId).order("version", { ascending: false }).limit(1).maybeSingle();
   const { data: v, error } = await db
     .from("website_versions")

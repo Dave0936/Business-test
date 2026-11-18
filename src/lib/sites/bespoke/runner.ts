@@ -8,6 +8,7 @@ import type { DesignBrief } from "@/lib/design/brief";
 import { enqueue } from "@/lib/jobs/queue";
 import { loadContext, resolveImages, saveVersion, slugify, themeFromBrief, withUploads } from "../builder";
 import { withSelfHostedFonts } from "../fonts-server";
+import { withVendor } from "../vendor-server";
 import { DraftRenderer } from "./render";
 import { generatedImagesFor } from "../generated-images";
 import type { ResolvedImage, SiteFiles, SiteSpec } from "../spec";
@@ -251,7 +252,7 @@ async function buildSlice(db: SupabaseClient, buildId: string, opts: SliceOption
   let photos: SiteFiles | null = null;
   const view: ViewPage = async (path, device) => {
     photos ??= await withUploads(db, ctx.spec, {});
-    const files = withSelfHostedFonts({ ...assembleBespoke(draft(state.source), ctx.assemble).files, ...photos });
+    const files = withVendor(withSelfHostedFonts({ ...assembleBespoke(draft(state.source), ctx.assemble).files, ...photos }));
     return renderer.render(files, path, device);
   };
   const messages = [...build.messages];

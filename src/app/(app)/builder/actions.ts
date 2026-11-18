@@ -1,6 +1,7 @@
 "use server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { motionInstruction } from "@/lib/sites/bespoke/motion";
 import { guarded, kickWorker, str, type ActionState } from "@/lib/actions";
 import { SiteContentSchema, ThemeSchema, type SiteFiles, type SiteSpec } from "@/lib/sites/spec";
 import { imageQueries } from "@/lib/sites/render";
@@ -147,6 +148,21 @@ export async function reviseSiteAction(_p: ActionState, form: FormData): Promise
     await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.revision_started", entityType: "website", entityId: websiteId, data: { build_id: r.buildId } });
     kickWorker(ctx);
     return "Revision started. A new version will appear when it's done.";
+  }, "/builder");
+}
+
+export async function reviseMotionAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("staff", async (ctx) => {
+    const websiteId = z.string().uuid().parse(str(form, "websiteId"));
+    const areas = z.array(z.enum(["hero", "scroll", "hover"])).parse(form.getAll("area").map(String));
+    const strength = z.enum(["subtle", "bold"]).parse(str(form, "strength") || "subtle");
+    const instruction = motionInstruction(areas, strength);
+    const { data: site } = await ctx.supabase.from("generated_websites").select("business_id").eq("id", websiteId).eq("organisation_id", ctx.organisationId).single();
+    if (!site) throw new Error("Website not found.");
+    const r = await startBuild(ctx.supabase, ctx.organisationId, site.business_id, ctx.user.id, { instruction });
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.revision_started", entityType: "website", entityId: websiteId, data: { build_id: r.buildId, motion: { areas, strength } } });
+    kickWorker(ctx);
+    return "Adding motion. A new version will appear when it's done.";
   }, "/builder");
 }
 

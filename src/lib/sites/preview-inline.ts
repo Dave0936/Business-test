@@ -67,7 +67,14 @@ export function inlinePageAssets(pagePath: string, files: SiteFiles): InlinedPag
     if (js === null) return;
     const body = js.replace(/<\/script/gi, "<\\/script");
     scriptHashes.push(`'sha256-${createHash("sha256").update(body, "utf8").digest("base64")}'`);
-    $(el).replaceWith(`<script>${body}</script>`);
+    // An inline script cannot be deferred: move deferred ones to the end of the body, in order,
+    // so they still run after the page is parsed (as the published site's files do).
+    if ($(el).is("[defer]") && $("body").length) {
+      $(el).remove();
+      $("body").append(`<script>${body}</script>`);
+    } else {
+      $(el).replaceWith(`<script>${body}</script>`);
+    }
   });
 
   // Images too: some browsers will not load a sandboxed frame's images from the app.

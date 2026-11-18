@@ -37,7 +37,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     // Self-hosted fonts are read from disk whenever a prototype version is saved.
     // The builder screenshots its drafts with a serverless Chromium (compressed browser files).
-    "/**": ["./data/fonts/**/*", "./node_modules/@sparticuz/chromium/bin/**"],
+    "/**": ["./data/fonts/**/*", "./data/vendor/**/*", "./node_modules/@sparticuz/chromium/bin/**"],
     "/api/places/**": ["./data/geonames/**"],
     "/opportunities": ["./data/geonames/**"],
   },
