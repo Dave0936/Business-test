@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { guarded, str, type ActionState } from "@/lib/actions";
 import { writeAudit } from "@/lib/audit-log";
+import { aiAvailable } from "@/lib/ai/client";
 import {
   addSiteReference, addUploadReference, collectPins, discoverSites, getOrCreateStudio, loadBusiness, pickReferences,
   prepareQuestions, produceStudioBrief, saveAnswers, saveEditedBrief, setVerdict, updateStudio, writeCreativeBrief,
@@ -172,8 +173,12 @@ export async function saveCreativeBriefAction(_p: ActionState, form: FormData): 
     if (text.length > 20000) throw new Error("Keep the creative brief under 20,000 characters.");
     const { error } = await ctx.supabase.from("design_studios").update({ creative_brief: text || null, creative_brief_by: text ? "person" : null, creative_brief_at: new Date().toISOString() }).eq("id", studio.id).eq("organisation_id", ctx.organisationId);
     if (error) throw error;
+    if (text && aiAvailable()) {
+      const fresh = await getOrCreateStudio(ctx.supabase, ctx.organisationId, await loadBusiness(ctx.supabase, ctx.organisationId, id), ctx.user.id);
+      await produceStudioBrief(ctx.supabase, ctx.organisationId, await loadBusiness(ctx.supabase, ctx.organisationId, id), fresh, ctx.user.id);
+    }
     await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "design.creative_brief_saved", entityType: "business", entityId: id, data: { length: text.length } });
-    return text ? "Saved. The next build or revision follows it." : "Cleared.";
+    return text ? "Saved, and the structured brief now follows it. The next build uses it." : "Cleared.";
   }, path(id));
 }
 
@@ -183,7 +188,9 @@ export async function writeCreativeBriefAction(_p: ActionState, form: FormData):
   return guarded("staff", async (ctx) => {
     const { business, studio } = await open(ctx, form);
     const r = await writeCreativeBrief(ctx.supabase, ctx.organisationId, business, studio, ctx.user.id);
+    // Keep the structured brief in step with it (practical parts: audience, calls to action, features).
+    await produceStudioBrief(ctx.supabase, ctx.organisationId, business, r.studio, ctx.user.id);
     await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "design.creative_brief_written", entityType: "business", entityId: id, data: { pictures: r.pictures } });
-    return r.pictures ? `Written from ${r.pictures} reference picture${r.pictures === 1 ? "" : "s"}. Read it, edit anything, then build.` : "Written without reference pictures (none loved yet). Love some references and write it again for a brief led by them.";
+    return r.pictures ? `Written (and the structured brief updated to match) from ${r.pictures} reference picture${r.pictures === 1 ? "" : "s"}. Read it, edit anything, then build.` : "Written without reference pictures (none loved yet). Love some references and write it again for a brief led by them.";
   }, path(id));
 }

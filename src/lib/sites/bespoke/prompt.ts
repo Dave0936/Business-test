@@ -69,17 +69,26 @@ export function buildBrief(ctx: BuildContext): { trusted: string; untrustedSiteT
     ctx.extraLanguages?.length
       ? `Also build the whole site in ${ctx.extraLanguages.map((l) => `${l.name} (folder ${l.code}/, lang="${l.code}")`).join(" and ")}: the same pages and file names, translated naturally by a native-level writer (not word for word), with the same placeholders. Add a small language switcher to every page that links to the same page in each language, labelled with each language's own name.`
       : "",
-    "Design brief (from our designer; follow it):",
-    JSON.stringify({
-      positioning: b.positioning, audience: b.audience, visual_direction: b.visual_direction, mood: b.mood_words,
-      palette: b.palette, typography: { heading: b.typography.heading, body: b.typography.body }, hero_layout: b.hero_layout, hero_notes: b.hero_notes,
-      pages: b.page_structure, calls_to_action: b.ctas.map((c) => c.label), navigation: b.navigation, image_style: b.image_style,
-      mobile: b.mobile_recommendations, functionality: b.functionality,
-    }, null, 2),
+    // One source for the look: with a creative brief, the structured brief keeps only the
+    // practical parts, so preset colours, fonts and page lists never compete with it.
+    ...(ctx.creativeBrief?.trim()
+      ? [
+          "Practical requirements (who it is for, calls to action, features). The look, colours, type and page structure come only from the creative brief below:",
+          JSON.stringify({ positioning: b.positioning, audience: b.audience, calls_to_action: b.ctas.map((c) => c.label), functionality: b.functionality }, null, 2),
+        ]
+      : [
+          "Design brief (from our designer; follow it):",
+          JSON.stringify({
+            positioning: b.positioning, audience: b.audience, visual_direction: b.visual_direction, mood: b.mood_words,
+            palette: b.palette, typography: { heading: b.typography.heading, body: b.typography.body }, hero_layout: b.hero_layout, hero_notes: b.hero_notes,
+            pages: b.page_structure, calls_to_action: b.ctas.map((c) => c.label), navigation: b.navigation, image_style: b.image_style,
+            mobile: b.mobile_recommendations, functionality: b.functionality,
+          }, null, 2),
+        ]),
     ctx.picks.length ? `Reference qualities chosen in the design studio, by section: ${ctx.picks.map((p) => `${p.section}: ${p.reason}`).join("; ")}` : "",
     ctx.houseStyle?.trim() ? `Our agency's house style (applies to every site we make):\n${ctx.houseStyle.trim()}` : "",
     ctx.creativeBrief?.trim()
-      ? `Creative brief for this site from our designer. It is the main design direction: where it differs from the generated design brief above on style, layout, typography, colour or structure, follow this one. It never overrides the honesty rules: where it asks for menu items, prices, opening hours, social links, addresses, history or other facts we have not verified, use clearly marked placeholders (for example "Menu coming soon", "Opening hours to follow") or leave them out; never invent them. Contact details only ever come from the placeholders.\n${ctx.creativeBrief.trim()}`
+      ? `Creative brief for this site: the design direction. It decides the look, colours, typography, layout and page structure. It never overrides the honesty rules: where it asks for menu items, prices, opening hours, social links, addresses, history or other facts we have not verified, use clearly marked placeholders (for example "Menu coming soon", "Opening hours to follow") or leave them out; never invent them. Contact details only ever come from the placeholders.\n${ctx.creativeBrief.trim()}`
       : "",
     ctx.images.length
       ? `Images you may use (exact addresses only; assets/ paths are bundled with the site). Images credited as AI-generated illustrations must never be presented as photos of this business, its premises, staff or work:\n${ctx.images.map((i) => `- ${i.url} | alt: ${i.alt}${i.credit ? ` | credit: ${i.credit}` : ""}`).join("\n")}`

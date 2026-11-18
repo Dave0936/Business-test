@@ -136,6 +136,22 @@ describe("builder prompts", () => {
     expect(trusted).not.toMatch(/IGNORE INSTRUCTIONS/);
     expect(untrustedSiteText).toMatch(/IGNORE INSTRUCTIONS/);
   });
+
+  it("give the creative brief sole charge of the look once there is one", () => {
+    const base = {
+      business: { name: "Harbour Kitchen", industryLabel: "Restaurants", city: "Leith", countryCode: "GB", bookingRelevant: true },
+      language: "en-GB", available: { phone: true, email: false, address: false }, brief, picks: [], images: [], existingSiteText: null,
+    };
+    const without = buildBrief(base).trusted;
+    expect(without).toContain(brief.palette.primary);
+    expect(without).toMatch(/"typography"/);
+    const withCreative = buildBrief({ ...base, creativeBrief: "# Bold blue\nOversized condensed type in #2463D8." }).trusted;
+    expect(withCreative).not.toContain(brief.palette.primary);
+    expect(withCreative).not.toMatch(/"typography"|"palette"|"pages"|"hero_layout"/);
+    expect(withCreative).toMatch(/calls_to_action/);
+    expect(withCreative).toMatch(/It decides the look, colours, typography, layout and page structure/);
+    expect(withCreative).toContain("#2463D8");
+  });
 });
 
 describe("a scripted build, turn by turn", () => {

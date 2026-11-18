@@ -232,7 +232,12 @@ export default async function StudioPage({ params }: { params: Promise<{ busines
           )}
         </Step>
 
-        <Step n={4} title="Creative brief" done={Boolean(latest)} description={latest ? <>Latest version {formatDate(latest.created_at, true)} · <Badge variant={latest.generated_by === "ai" ? "default" : "secondary"}>{latest.generated_by === "ai" ? "Written by Claude" : latest.generated_by === "manual" ? "Edited by your team" : "Sector preset + your choices"}</Badge></> : "Uses your picks and answers. Every version is kept, and the website builder uses the latest one."}>
+        <Step n={4} title="Structured brief and build" done={Boolean(latest)} description={latest ? <>Latest version {formatDate(latest.created_at, true)} · <Badge variant={latest.generated_by === "ai" ? "default" : "secondary"}>{latest.generated_by === "ai" ? "Written by Claude" : latest.generated_by === "manual" ? "Edited by your team" : "Sector preset + your choices"}</Badge></> : "A short structured summary the builder needs to start. Every version is kept."}>
+          <p className="mb-3 rounded-md border bg-muted/40 p-3 text-sm" data-testid="brief-role">
+            {(studio as { creative_brief?: string | null } | null)?.creative_brief?.trim()
+              ? "Your creative brief (above) decides the look: colours, type, layout and pages. The builder takes only the practical parts from this structured brief (who it is for, calls to action, features); it is rewritten to match whenever the creative brief changes."
+              : "This is an automatic starting point, made from the sector and your choices before anyone has written a creative brief. Write a creative brief above (or let Claude write it from your loved references) and it takes over the look."}
+          </p>
           <div className="mb-4 flex flex-wrap gap-2">
             <ActionButton action={briefAction} hidden={hidden} label={latest ? "Write a new brief" : "Create brief"} disabled={!editable} />
             {latest && <ActionButton action={buildSiteAction} hidden={hidden} label="Build prototype" variant="outline" disabled={!editable} />}
