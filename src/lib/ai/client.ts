@@ -85,7 +85,9 @@ export async function runAgent<S extends z.ZodType>(opts: RunAgentOptions<S>): P
 
   let response;
   try {
-    response = await anthropic.beta.messages.parse({
+    // Streamed: long answers (creative briefs, art direction) can take minutes, and the SDK
+    // refuses non-streaming requests that might run past ten minutes.
+    response = await anthropic.beta.messages.stream({
       model,
       max_tokens: opts.maxTokens ?? 16000,
       betas: ["server-side-fallback-2026-07-01"],
@@ -94,7 +96,7 @@ export async function runAgent<S extends z.ZodType>(opts: RunAgentOptions<S>): P
       system: [{ type: "text", text: `${opts.system}\n\n${UNTRUSTED_RULE}`, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: opts.prompt }],
       output_config: { effort: opts.effort ?? "medium", format: betaZodOutputFormat(opts.schema) },
-    });
+    }).finalMessage();
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) throw new Error(`Claude rate limit reached for ${opts.agent}; the job will retry.`);
     if (err instanceof Anthropic.AuthenticationError) throw new Error("Anthropic API key was rejected. Check ANTHROPIC_API_KEY.");

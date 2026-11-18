@@ -1,5 +1,6 @@
 "use server";
 import { z } from "zod";
+import { after } from "next/server";
 import { guarded, str, type ActionState } from "@/lib/actions";
 import { writeAudit } from "@/lib/audit-log";
 import { aiAvailable } from "@/lib/ai/client";
@@ -188,9 +189,16 @@ export async function writeCreativeBriefAction(_p: ActionState, form: FormData):
   return guarded("staff", async (ctx) => {
     const { business, studio } = await open(ctx, form);
     const r = await writeCreativeBrief(ctx.supabase, ctx.organisationId, business, studio, ctx.user.id);
-    // Keep the structured brief in step with it (practical parts: audience, calls to action, features).
-    await produceStudioBrief(ctx.supabase, ctx.organisationId, business, r.studio, ctx.user.id);
+    // Keep the structured brief in step with it (practical parts: audience, calls to action,
+    // features), after the answer is sent so the creative brief shows straight away.
+    after(async () => {
+      try {
+        await produceStudioBrief(ctx.supabase, ctx.organisationId, business, r.studio, ctx.user.id);
+      } catch (e) {
+        console.error("structured brief update failed", e);
+      }
+    });
     await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "design.creative_brief_written", entityType: "business", entityId: id, data: { pictures: r.pictures } });
-    return r.pictures ? `Written (and the structured brief updated to match) from ${r.pictures} reference picture${r.pictures === 1 ? "" : "s"}. Read it, edit anything, then build.` : "Written without reference pictures (none loved yet). Love some references and write it again for a brief led by them.";
+    return r.pictures ? `Written (the structured brief is being updated to match) from ${r.pictures} reference picture${r.pictures === 1 ? "" : "s"}. Read it, edit anything, then build.` : "Written without reference pictures (none loved yet). Love some references and write it again for a brief led by them.";
   }, path(id));
 }
