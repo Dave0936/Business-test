@@ -19,7 +19,8 @@ import { runArtDirectorAgent } from "@/lib/ai/agents/creative-agents";
 import { makeChecker } from "./check";
 import { BUILD_TOOLS, type CheckOutcome, type DraftState } from "./tools";
 import { applyTurn, type ViewPage } from "./loop";
-import { BUILD_SYSTEM, buildBrief, revisionMessage } from "./prompt";
+import { BUILD_SYSTEM, buildBrief, homeOnlyNote, restMessage, revisionMessage } from "./prompt";
+import { plannedPagesFromBrief, withPlaceholders, type PlannedPage } from "./pages";
 
 export const MAX_TURNS = 40;
 
@@ -44,6 +45,8 @@ interface BuildRow {
   last_check: { outcome: CheckOutcome | null; dirty: boolean; viewed?: string[]; canView?: boolean } | null;
   cost_usd: number;
   created_by: string | null;
+  scope?: "home" | "full" | "rest";
+  planned_pages?: PlannedPage[];
   /** Set when the builder called finish (saved before the version is saved). */
   summary: string | null;
   suggestions: string[] | null;
@@ -127,7 +130,12 @@ function localAssets(images: Record<string, ResolvedImage>): string[] {
  * Create a build (new site, or a revision of the current Claude-written version) and queue it.
  * Throws if Claude is not connected: callers fall back to the labelled template demo.
  */
-export async function startBuild(db: SupabaseClient, org: string, businessId: string, actorId: string | null, opts: { instruction?: string; runId?: string | null; queue?: boolean } = {}): Promise<{ buildId: string; websiteId: string }> {
+/**
+ * Start a build. scope "home" builds only the homepage (other planned pages become
+ * placeholders); "rest" builds the remaining pages in the agreed homepage's design; "full"
+ * builds everything at once. Revisions keep the scope of the version they change.
+ */
+export async function startBuild(db: SupabaseClient, org: string, businessId: string, actorId: string | null, opts: { instruction?: string; runId?: string | null; queue?: boolean; scope?: "home" | "full" | "rest" } = {}): Promise<{ buildId: string; websiteId: string }> {
   if (!aiAvailable()) throw new Error("The builder needs Claude. Add your Anthropic key under Integrations.");
   const ctx = await buildContext(db, org, businessId, actorId);
   const site = await ensureWebsite(db, org, ctx.business, ctx.briefRow.id);
@@ -145,14 +153,28 @@ export async function startBuild(db: SupabaseClient, org: string, businessId: st
     houseStyle: ctx.houseStyle, creativeBrief: ctx.creativeBrief,
   });
   const refs = await lovedPictures(db, org, businessId);
-  if (opts.instruction) {
+  let scope: "home" | "full" | "rest" = opts.scope ?? "full";
+  let planned: PlannedPage[] = [];
+  if (opts.instruction || scope === "rest") {
     const { data: v } = site.current_version_id ? await db.from("website_versions").select("id, spec").eq("id", site.current_version_id).single() : { data: null };
-    const base = (v?.spec as SiteSpec | undefined)?.source;
+    const baseSpec = v?.spec as SiteSpec | undefined;
+    const base = baseSpec?.source;
     if (!v || !base) throw new Error("Revisions work on versions written by the builder. Build the site with Claude first.");
     source = { ...base };
     baseVersionId = v.id;
-    messages = [{ role: "user", content: [{ type: "text", text: trusted }, ...refs, { type: "text", text: revisionMessage(opts.instruction.slice(0, 2000), Object.keys(source)) }] }];
+    if (scope === "rest") {
+      if (baseSpec?.scope !== "home") throw new Error("This site is already complete. Use Revise to change it.");
+      planned = baseSpec.plannedPages?.length ? baseSpec.plannedPages : plannedPagesFromBrief(ctx.brief, MAX_PAGES);
+      const rest = planned.filter((p) => p.file !== "index.html");
+      messages = [{ role: "user", content: [{ type: "text", text: trusted }, ...refs, { type: "text", text: restMessage(rest, Object.keys(source)) }] }];
+    } else {
+      // A revision of a homepage draft stays a homepage draft.
+      if (baseSpec?.scope === "home") { scope = "home"; planned = baseSpec.plannedPages ?? plannedPagesFromBrief(ctx.brief, MAX_PAGES); }
+      const extra = scope === "home" ? `\n${homeOnlyNote(planned)}` : "";
+      messages = [{ role: "user", content: [{ type: "text", text: trusted }, ...refs, { type: "text", text: `${revisionMessage(opts.instruction!.slice(0, 2000), Object.keys(source))}${extra}` }] }];
+    }
   } else {
+    if (scope === "home") planned = plannedPagesFromBrief(ctx.brief, MAX_PAGES);
     // Art director: one concrete direction for this version, different from earlier ones.
     try {
       const { data: earlierRows } = await db.from("site_builds").select("direction_summary").eq("website_id", site.id).eq("organisation_id", org).not("direction_summary", "is", null).order("created_at", { ascending: false }).limit(3);
@@ -164,16 +186,17 @@ export async function startBuild(db: SupabaseClient, org: string, businessId: st
     const parts: (Anthropic.Beta.BetaTextBlockParam | Anthropic.Beta.BetaImageBlockParam)[] = [{ type: "text", text: trusted }, ...refs];
     if (direction) parts.push({ type: "text", text: `Art direction for this version from our art director (DIRECTION.md). Build exactly this; it follows the brief above:\n\n${direction.markdown}` });
     if (untrustedSiteText) parts.push({ type: "text", text: `Text from the business's current website, to understand what it offers (do not copy it):\n${untrusted("current website", untrustedSiteText)}` });
-    parts.push({ type: "text", text: "Build the site now." });
+    parts.push({ type: "text", text: scope === "home" ? homeOnlyNote(planned) : "Build the site now." });
     messages = [{ role: "user", content: parts }];
   }
 
   const { data: build, error } = await db.from("site_builds").insert({
-    organisation_id: org, business_id: businessId, website_id: site.id, kind: opts.instruction ? "revision" : "new",
+    organisation_id: org, business_id: businessId, website_id: site.id, kind: opts.instruction || scope === "rest" ? "revision" : "new",
+    scope, planned_pages: planned,
     instruction: opts.instruction ?? null, base_version_id: baseVersionId, status: "queued", messages, source,
     direction: direction?.markdown ?? null, direction_summary: direction?.summary.slice(0, 400) ?? null,
     activity: [
-      { at: new Date().toISOString(), text: opts.instruction ? `Revision requested: ${opts.instruction.slice(0, 200)}` : "Build started" },
+      { at: new Date().toISOString(), text: scope === "rest" ? "Building the rest of the site in the homepage's design" : opts.instruction ? `Revision requested: ${opts.instruction.slice(0, 200)}` : scope === "home" ? "Homepage build started" : "Build started" },
       ...(direction ? [{ at: new Date().toISOString(), text: `Art direction: ${direction.summary.slice(0, 300)}` }] : []),
       ...(refs.length ? [{ at: new Date().toISOString(), text: `Showing the builder ${refs.filter((b) => b.type === "image").length} of your loved references` }] : []),
     ],
@@ -214,7 +237,11 @@ async function buildSlice(db: SupabaseClient, buildId: string, opts: SliceOption
   if (!["queued", "running"].includes(build.status)) return { status: build.status as "succeeded" | "failed" | "stopped" };
   const org = build.organisation_id;
   const ctx = await buildContext(db, org, build.business_id, build.created_by);
-  const check = makeChecker(ctx.assemble, ctx.spec, localAssets(ctx.images));
+  // Homepage builds are checked (and seen) with placeholders for the pages still to come.
+  const planned = build.scope === "home" ? build.planned_pages ?? [] : [];
+  const draft = (src: Record<string, string>) => (planned.length ? withPlaceholders(src, planned) : src);
+  const baseCheck = makeChecker(ctx.assemble, ctx.spec, localAssets(ctx.images));
+  const check = (src: Record<string, string>) => baseCheck(draft(src));
 
   const state: DraftState = {
     maxPages: MAX_PAGES * (1 + ctx.extraLanguages.length), source: { ...build.source }, lastCheck: build.last_check?.outcome ?? null, dirtySinceCheck: build.last_check?.dirty ?? true, finished: null,
@@ -224,7 +251,7 @@ async function buildSlice(db: SupabaseClient, buildId: string, opts: SliceOption
   let photos: SiteFiles | null = null;
   const view: ViewPage = async (path, device) => {
     photos ??= await withUploads(db, ctx.spec, {});
-    const files = withSelfHostedFonts({ ...assembleBespoke(state.source, ctx.assemble).files, ...photos });
+    const files = withSelfHostedFonts({ ...assembleBespoke(draft(state.source), ctx.assemble).files, ...photos });
     return renderer.render(files, path, device);
   };
   const messages = [...build.messages];
@@ -284,14 +311,17 @@ async function buildSlice(db: SupabaseClient, buildId: string, opts: SliceOption
 }
 
 async function finalise(db: SupabaseClient, build: BuildRow, ctx: Awaited<ReturnType<typeof buildContext>>, state: DraftState, log: { at: string; text: string }[]): Promise<{ status: "succeeded"; versionId: string }> {
-  const { files, notes } = assembleBespoke(state.source, ctx.assemble);
+  const home = build.scope === "home";
+  const planned = build.planned_pages ?? [];
+  const { files, notes } = assembleBespoke(home ? withPlaceholders(state.source, planned) : state.source, ctx.assemble);
   const { data: site } = await db.from("generated_websites").select("slug").eq("id", build.website_id).single();
   const spec: SiteSpec = {
     ...ctx.spec, slug: site?.slug ?? "", source: state.source,
     pages: Object.keys(state.source).filter((p) => p.endsWith(".html")).sort(),
     summary: state.finished?.summary, suggestions: state.finished?.suggestions,
+    scope: home ? "home" : "full", ...(home ? { plannedPages: planned } : {}),
   };
-  const note = build.kind === "revision" ? "Revised by the builder" : "Built by the builder";
+  const note = build.scope === "rest" ? "Rest of the site built in the homepage's design" : home ? (build.kind === "revision" ? "Homepage revised" : "Homepage built (other pages to follow)") : build.kind === "revision" ? "Revised by the builder" : "Built by the builder";
   const r = await saveVersion(db, { organisationId: build.organisation_id, websiteId: build.website_id, businessId: build.business_id, spec, files, note, actorId: build.created_by });
   const activity = [...log, ...notes.map((n) => ({ at: new Date().toISOString(), text: n })), { at: new Date().toISOString(), text: r.report.passed ? "Saved as a new version; final checks passed" : "Saved as a new version; final checks found problems" }];
   await db.from("site_builds").update({ status: "succeeded", result_version_id: r.versionId, finished_at: new Date().toISOString(), activity: activity.slice(-200) }).eq("id", build.id).eq("organisation_id", build.organisation_id);

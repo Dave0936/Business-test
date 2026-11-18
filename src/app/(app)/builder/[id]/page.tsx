@@ -15,7 +15,7 @@ import type { QaCheck } from "@/lib/qa/checks";
 import type { SiteFiles, SiteSpec } from "@/lib/sites/spec";
 import { formatDate } from "@/lib/utils";
 import { PreviewFrame } from "./preview-frame";
-import { buildSiteAction, restoreVersion, reviseSiteAction, stopBuildAction } from "../actions";
+import { buildRestAction, buildSiteAction, restoreVersion, reviseSiteAction, stopBuildAction } from "../actions";
 import { recheckWebsiteAction } from "../../approvals/actions";
 import { DECISION_LABEL, notReadyReason, type Decision } from "@/lib/approvals/review";
 
@@ -57,7 +57,12 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
       <PageHeader
         title={biz.name}
         description={<span className="flex flex-wrap items-center gap-2"><StatusBadge status={site.status} /><DemoBadge show={biz.is_demo} />{current && <Badge variant="secondary">Version {current.version} · {current.generated_by === "ai" ? "built by Claude" : current.generated_by === "demo" ? "template demo" : "edited"}</Badge>}<Link href={`/leads/${biz.id}`} className="text-primary hover:underline">lead</Link><Link href={`/design-research/${biz.id}`} className="text-primary hover:underline">design studio</Link></span>}
-        actions={editable && !active && <ActionButton action={buildSiteAction} hidden={{ businessId: biz.id }} label={current ? "Build again from the brief" : "Build site"} variant={current ? "outline" : "default"} confirm={current ? "Build a fresh site from the brief? The current version is kept in the history." : undefined} />}
+        actions={editable && !active && (
+          <span className="flex flex-wrap gap-2">
+            <ActionButton action={buildSiteAction} hidden={{ businessId: biz.id, scope: "home" }} label={current ? "New homepage from the brief" : "Build homepage first"} variant={current ? "outline" : "default"} confirm={current ? "Build a fresh homepage from the brief? The current version is kept in the history." : undefined} />
+            <ActionButton action={buildSiteAction} hidden={{ businessId: biz.id, scope: "full" }} label={current ? "Whole site from the brief" : "Build whole site"} variant="outline" confirm={current ? "Build a fresh whole site from the brief? The current version is kept in the history." : undefined} />
+          </span>
+        )}
       />
 
       {current && isTemplate && current.generated_by === "demo" && (
@@ -81,8 +86,14 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
         <div className="grid gap-5 xl:grid-cols-[1fr_360px] [&>*]:min-w-0">
           <PreviewFrame base={previewToken ? `/api/preview/${current.id}/~${previewToken}` : `/api/preview/${current.id}`} versionKey={current.id} pages={pages} />
           <div className="space-y-5">
+            {spec?.scope === "home" && (
+              <Card data-testid="homepage-draft" className="border-primary/40">
+                <CardHeader><CardTitle>Homepage draft</CardTitle><CardDescription>Agree the look here first. Use Revise as often as you like (other pages are placeholders for now). When you are happy, build the rest of the site in this design; the full site then goes to approval.</CardDescription></CardHeader>
+                {editable && <CardContent><ActionButton action={buildRestAction} hidden={{ websiteId: id }} label="Homepage agreed: build the rest of the site" disabled={!aiLive || Boolean(active)} confirm={`Build the other pages (${(spec.plannedPages ?? []).filter((p) => p.file !== "index.html").map((p) => p.label).join(", ") || "as planned"}) in this homepage's design?`} /></CardContent>}
+              </Card>
+            )}
             <Card data-testid="approval-card">
-              <CardHeader><CardTitle>Approval</CardTitle><CardDescription>{site.status === "awaiting_approval" ? "Passed its checks and waiting for an owner or administrator." : notReadyReason({ status: site.status, qaPassed: qa ? qa.passed : null, generatedBy: current.generated_by, isDemoBusiness: biz.is_demo })}</CardDescription></CardHeader>
+              <CardHeader><CardTitle>Approval</CardTitle><CardDescription>{spec?.scope === "home" ? "A homepage draft can't be sent for approval. Build the rest of the site first." : site.status === "awaiting_approval" ? "Passed its checks and waiting for an owner or administrator." : notReadyReason({ status: site.status, qaPassed: qa ? qa.passed : null, generatedBy: current.generated_by, isDemoBusiness: biz.is_demo })}</CardDescription></CardHeader>
               <CardContent className="space-y-3 text-sm">
                 {lastDecision && (
                   <div>

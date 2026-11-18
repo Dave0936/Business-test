@@ -240,7 +240,8 @@ export default async function StudioPage({ params }: { params: Promise<{ busines
           </p>
           <div className="mb-4 flex flex-wrap gap-2">
             <ActionButton action={briefAction} hidden={hidden} label={latest ? "Write a new brief" : "Create brief"} disabled={!editable} />
-            {latest && <ActionButton action={buildSiteAction} hidden={hidden} label="Build prototype" variant="outline" disabled={!editable} />}
+            {latest && <ActionButton action={buildSiteAction} hidden={{ ...hidden, scope: "home" }} label="Build homepage first" disabled={!editable} />}
+            {latest && <ActionButton action={buildSiteAction} hidden={{ ...hidden, scope: "full" }} label="Build whole site" variant="outline" disabled={!editable} />}
           </div>
           {latest && (
             <div className="space-y-5">

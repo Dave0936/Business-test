@@ -70,7 +70,7 @@ try {
     const id = work[round % work.length].split("/").pop();
     await owner.goto(`${BASE}/builder/${id}`);
     owner.once("dialog", (d) => d.accept());
-    await owner.locator("form").filter({ has: owner.getByRole("button", { name: "Build again from the brief" }) }).locator("button[type=submit]").click();
+    await owner.locator("form").filter({ has: owner.getByRole("button", { name: "Whole site from the brief" }) }).locator("button[type=submit]").click();
     for (let i = 0; i < 40; i++) {
       await owner.waitForTimeout(4000);
       await owner.goto(`${BASE}/approvals`);
@@ -114,7 +114,7 @@ try {
   const siteUrl = `${BASE}/builder/${siteA.split("/").pop()}`;
   const before = await currentVersion(owner, siteUrl);
   check("builder page shows the reviewer's feedback", ((await owner.locator('[data-testid="approval-card"]').textContent()) ?? "").includes(ask));
-  const again = owner.locator("form").filter({ has: owner.getByRole("button", { name: "Build again from the brief" }) });
+  const again = owner.locator("form").filter({ has: owner.getByRole("button", { name: "Whole site from the brief" }) });
   owner.once("dialog", (d) => d.accept());
   await again.locator("button[type=submit]").click();
   let after = before;

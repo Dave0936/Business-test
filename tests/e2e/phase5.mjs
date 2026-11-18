@@ -66,9 +66,9 @@ try {
   await page.getByRole("button", { name: "Create brief" }).click();
   await page.waitForTimeout(2500);
   await page.goto(`${BASE}/design-research/${bizId}`);
-  const buildBtn = page.locator("form").filter({ has: page.getByRole("button", { name: "Build prototype" }) });
-  check("studio offers Build prototype once a brief exists", (await buildBtn.count()) === 1);
-  const msg = await submitAndRead(buildBtn, "Build prototype");
+  const buildBtn = page.locator("form").filter({ has: page.getByRole("button", { name: "Build whole site" }) });
+  check("studio offers Build whole site and Build homepage first once a brief exists", (await buildBtn.count()) === 1);
+  const msg = await submitAndRead(buildBtn, "Build whole site");
   check("without Claude, a labelled template demo is made instead", /Claude isn't connected.*template demo.*can't be sent for approval/.test(msg), msg);
 
   // The site appears in the builder list; open it.
@@ -118,7 +118,7 @@ try {
   check("zip download works", zip.status() === 200 && zip.headers()["content-type"] === "application/zip" && body.subarray(0, 2).toString() === "PK" && body.includes(Buffer.from("index.html")), `${zip.status()} ${body.length} bytes`);
 
   // Build again → version 2, then restore version 1 → version 3.
-  const again = page.locator("form").filter({ has: page.getByRole("button", { name: "Build again from the brief" }) });
+  const again = page.locator("form").filter({ has: page.getByRole("button", { name: "Whole site from the brief" }) });
   page.once("dialog", (d) => d.accept());
   await submitAndRead(again);
   check("second build produces version 2", await waitForVersion(page, siteUrl, 2));

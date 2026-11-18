@@ -128,10 +128,11 @@ export async function buildSiteAction(_p: ActionState, form: FormData): Promise<
       await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.demo_build", entityType: "business", entityId: businessId });
       return "Claude isn't connected, so a template demo is being made for testing. It can't be sent for approval for a real business.";
     }
-    const r = await startBuild(ctx.supabase, ctx.organisationId, businessId, ctx.user.id);
-    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.build_started", entityType: "website", entityId: r.websiteId, data: { build_id: r.buildId } });
+    const scope = str(form, "scope") === "home" ? "home" : "full";
+    const r = await startBuild(ctx.supabase, ctx.organisationId, businessId, ctx.user.id, { scope });
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.build_started", entityType: "website", entityId: r.websiteId, data: { build_id: r.buildId, scope } });
     kickWorker(ctx);
-    return "Build started. Claude is writing the site; progress shows on the site's page.";
+    return scope === "home" ? "Homepage build started. Agree it (revise as often as you like), then build the rest of the site." : "Build started. Claude is writing the site; progress shows on the site's page.";
   }, ["/builder", "/design-research"]);
 }
 
@@ -159,5 +160,18 @@ export async function stopBuildAction(_p: ActionState, form: FormData): Promise<
     await ctx.supabase.from("site_builds").update({ status: "stopped", finished_at: new Date().toISOString() }).eq("id", buildId).eq("organisation_id", ctx.organisationId).eq("status", "queued");
     await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.build_stopped", entityType: "site_build", entityId: buildId });
     return "Stopping. The current step finishes first; the draft is kept.";
+  }, "/builder");
+}
+
+/** The homepage is agreed: build the remaining pages in its design. */
+export async function buildRestAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("staff", async (ctx) => {
+    const websiteId = z.string().uuid().parse(str(form, "websiteId"));
+    const { data: site } = await ctx.supabase.from("generated_websites").select("business_id").eq("id", websiteId).eq("organisation_id", ctx.organisationId).single();
+    if (!site) throw new Error("Website not found.");
+    const r = await startBuild(ctx.supabase, ctx.organisationId, site.business_id, ctx.user.id, { scope: "rest" });
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "website.rest_started", entityType: "website", entityId: websiteId, data: { build_id: r.buildId } });
+    kickWorker(ctx);
+    return "Building the rest of the site in the homepage's design. The full site goes to approval when it passes its checks.";
   }, "/builder");
 }

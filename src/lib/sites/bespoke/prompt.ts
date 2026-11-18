@@ -103,3 +103,23 @@ export function revisionMessage(instruction: string, files: string[]): string {
 }
 
 export const NUDGE = "Continue the build with the tools. When the site is complete, run check_site, fix any problems, and call finish.";
+
+/** Homepage first: build index.html only; the other pages are planned and linked. */
+export function homeOnlyNote(planned: { file: string; label: string }[]): string {
+  const others = planned.filter((p) => p.file !== "index.html");
+  return [
+    "Homepage first: in this build make ONLY the home page (index.html), with styles.css and script.js. It sets the design for the whole site, so make it complete and ambitious.",
+    others.length ? `The other pages come later. Link to them in the navigation and footer with exactly these file names: ${others.map((p) => `${p.file} (${p.label})`).join(", ")}. Do not write them: simple placeholder pages are added automatically so the links work.` : "",
+    "Put a short enquiry form on the home page so it works on its own, and write script.js so it handles any form marked data-concept-form.",
+    "Build the home page now.",
+  ].filter(Boolean).join("\n");
+}
+
+/** Build the remaining pages in the agreed homepage's design. */
+export function restMessage(rest: { file: string; label: string }[], files: string[]): string {
+  return [
+    `The home page is agreed. Its files are loaded (${files.join(", ")}). Now build the rest of the site: ${rest.map((p) => `${p.file} (${p.label})`).join(", ")}.`,
+    "Read index.html and styles.css first. Every new page uses the same design: the same header, navigation, footer, type scale, colours, components and level of ambition, with its own composition so it does not feel like a copy of the home page.",
+    "Add to styles.css rather than changing existing rules; do not change index.html except to fix navigation. Run check_site, look at each new page with view_page on desktop and phone, then finish.",
+  ].join("\n");
+}

@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { assembleBespoke, isAllowedSourcePath, type AssembleContext } from "@/lib/sites/bespoke/assemble";
 import { executeBuildTool, type DraftState } from "@/lib/sites/bespoke/tools";
 import { makeChecker } from "@/lib/sites/bespoke/check";
-import { BUILD_SYSTEM, NUDGE, buildBrief } from "@/lib/sites/bespoke/prompt";
+import { BUILD_SYSTEM, NUDGE, buildBrief, homeOnlyNote, restMessage } from "@/lib/sites/bespoke/prompt";
+import { isPlaceholder, plannedPagesFromBrief, stubPage, withPlaceholders } from "@/lib/sites/bespoke/pages";
 import { applyTurn } from "@/lib/sites/bespoke/loop";
 import { presetBrief } from "@/lib/design/brief";
 import type { SiteSpec } from "@/lib/sites/spec";
@@ -239,6 +240,44 @@ describe("looking at the draft (view_page)", () => {
     expect(state.canView).toBe(false);
     const log = await applyTurn(state, messages, reply([use("b", "check_site"), use("c", "finish", { summary: "x", suggestions: [] })]), check, noBrowser);
     expect(log).toEqual(["Checks passed", "Finished"]);
+  });
+});
+
+describe("homepage first", () => {
+  it("plans pages from the brief, home first, with safe file names", () => {
+    const planned = plannedPagesFromBrief({ page_structure: [{ page: "Home", sections: [] }, { page: "The Menu", sections: [] }, { page: "Our Story & Team", sections: [] }, { page: "menu", sections: [] }] }, 8);
+    expect(planned).toEqual([{ file: "index.html", label: "Home" }, { file: "the-menu.html", label: "The Menu" }, { file: "our-story-and-team.html", label: "Our Story & Team" }, { file: "menu.html", label: "menu" }]);
+    expect(plannedPagesFromBrief({ page_structure: Array.from({ length: 12 }, (_, i) => ({ page: `Page ${i}`, sections: [] })) }, 8)).toHaveLength(8);
+  });
+
+  it("a homepage on its own passes the checks with placeholders for the planned pages", () => {
+    const home = { "index.html": GOOD["index.html"], "styles.css": GOOD["styles.css"], "script.js": GOOD["script.js"] };
+    const check = makeChecker(CTX, SPEC);
+    // index.html links to contact.html, which is not written yet.
+    expect(check(home).failures.join(" ")).toMatch(/contact\.html/);
+    const withStubs = withPlaceholders(home, [{ file: "index.html", label: "Home" }, { file: "contact.html", label: "Contact" }]);
+    expect(isPlaceholder(withStubs["contact.html"])).toBe(true);
+    const failures = check(withStubs).failures.join(" | ");
+    expect(failures).not.toMatch(/contact\.html|missing page/);
+    // The site still needs a form: homepage builds are told to put one on the home page.
+    expect(failures).toMatch(/No enquiry or booking form/);
+    // Placeholders never replace a page that exists.
+    expect(withPlaceholders(GOOD, [{ file: "contact.html", label: "Contact" }])["contact.html"]).toBe(GOOD["contact.html"]);
+  });
+
+  it("placeholder pages reuse the homepage frame with their own single heading", () => {
+    const html = stubPage("<!doctype html><html lang=\"en-GB\"><body><header><h1>Brand</h1><nav><a href=\"menu.html\">Menu</a></nav></header><main><h1>Home</h1></main><footer>F</footer></body></html>", { file: "menu.html", label: "Menu" });
+    expect(html).toMatch(/lang="en-GB"/);
+    expect(html.match(/<h1/g)).toHaveLength(1);
+    expect(html).toMatch(/<nav><a href="menu.html">Menu<\/a><\/nav>/);
+    expect(html).toMatch(/built once the homepage is agreed/);
+  });
+
+  it("tells the builder what to build at each stage", () => {
+    const planned = [{ file: "index.html", label: "Home" }, { file: "menu.html", label: "Menu" }];
+    expect(homeOnlyNote(planned)).toMatch(/ONLY the home page/);
+    expect(homeOnlyNote(planned)).toMatch(/menu\.html \(Menu\)/);
+    expect(restMessage([{ file: "menu.html", label: "Menu" }], ["index.html", "styles.css"])).toMatch(/home page is agreed[\s\S]*menu\.html[\s\S]*same header/);
   });
 });
 
