@@ -102,3 +102,31 @@ export async function runArtDirectorAgent(args: {
   ];
   return runAgent({ agent: "art_director", organisationId: args.organisationId, db: args.db, system: DIRECTION_SYSTEM, prompt, schema: DirectionSchema, effort: "high", maxTokens: 20000 });
 }
+
+export const PhotoPromptsSchema = z.object({
+  prompts: z.array(z.object({ slot: z.string(), prompt: z.string().max(700) })),
+});
+
+const PHOTO_SYSTEM = `You write prompts for an AI photo model. Each prompt describes ONE realistic photograph for a small business's concept website, in the look of the brief.
+
+For each subject write 40 to 90 words covering: the subject and setting, composition and crop, camera and lens feel, light, colour palette and grade, texture and mood. Make it feel like real, tactile, slightly imperfect photography, not glossy stock.
+
+Never mention websites, pages, layouts, sections, frames, panels, borders, grids, collages, mood boards, screens, user interfaces, booking, maps, buttons, text, lettering, logos or signage: the model will draw them. Never describe more than one image in a prompt.
+People: only partial or anonymous (hands, out-of-focus figures, backs, faces cropped out of frame); never a recognisable person, and never suggest they are the business's staff or customers.
+Return one prompt per subject, with the subject's exact text as slot.`;
+
+export async function runPhotoPromptAgent(args: {
+  db: SupabaseClient;
+  organisationId: string;
+  business: string;
+  look: string;
+  subjects: string[];
+}) {
+  const prompt = [
+    `Business: ${args.business}.`,
+    `The look (from the brief; use only what concerns photography: light, grade, palette, subjects, crops):\n${args.look.slice(0, 6000)}`,
+    `Subjects:\n${args.subjects.map((s) => `- ${s}`).join("\n")}`,
+    "Write the prompts.",
+  ].join("\n\n");
+  return runAgent({ agent: "photo_prompts", organisationId: args.organisationId, db: args.db, system: PHOTO_SYSTEM, prompt, schema: PhotoPromptsSchema, effort: "low", maxTokens: 8000 });
+}

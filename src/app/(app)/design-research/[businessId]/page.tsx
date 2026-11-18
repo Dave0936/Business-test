@@ -71,7 +71,7 @@ export default async function StudioPage({ params }: { params: Promise<{ busines
   const genPaths = (genRows ?? []).filter((g) => g.storage_path).map((g) => g.storage_path as string);
   const { data: genSigned } = genPaths.length ? await db.storage.from("site-assets").createSignedUrls(genPaths, 3600) : { data: [] };
   const genUrl = new Map((genSigned ?? []).filter((x) => x.path && x.signedUrl).map((x) => [x.path as string, x.signedUrl]));
-  const panelImages: PanelImage[] = (genRows ?? []).map((g) => ({ id: g.id, slot: g.slot, status: g.status, url: g.storage_path ? genUrl.get(g.storage_path) ?? null : null, error: g.error }));
+  const panelImages: PanelImage[] = (genRows ?? []).filter((g) => g.error !== "Discarded by our team").map((g) => ({ id: g.id, slot: g.slot, status: g.status, url: g.storage_path ? genUrl.get(g.storage_path) ?? null : null, error: g.error }));
   const imageFor = (r: ReferenceRow) => (r.storage_path ? signed[r.storage_path] ?? null : r.image_url);
   const byId = new Map(refs.map((r) => [r.id, r]));
   const picks = (studio?.picks ?? []).filter((p) => byId.has(p.reference_id));

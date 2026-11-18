@@ -2,8 +2,8 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { generateImagesAction, quoteImagesAction, type QuoteState } from "../image-actions";
-import type { ActionStateLike } from "@/components/app/action-button";
+import { discardImagesAction, generateImagesAction, quoteImagesAction, type QuoteState } from "../image-actions";
+import { ActionButton, type ActionStateLike } from "@/components/app/action-button";
 
 export interface PanelImage {
   id: string;
@@ -37,6 +37,7 @@ export function ImagePanel({ businessId, connected, canEdit, images }: { busines
           {quote.quote && <span className="text-xs text-muted-foreground">Higgsfield&apos;s estimate for: {quote.quote.slots.join(" · ")}. Failed or moderated images aren&apos;t charged.</span>}
           {(quote.error || quote.message) && <span role="status" className={`text-xs ${quote.error ? "text-destructive" : "text-muted-foreground"}`}>{quote.error ?? quote.message}</span>}
           {(run.error || run.message) && <span role="status" className={`text-xs ${run.error ? "text-destructive" : "text-success"}`}>{run.error ?? run.message}</span>}
+          {canEdit && images.length > 1 && <ActionButton action={discardImagesAction} hidden={{ businessId }} label="Discard all photos" variant="ghost" confirm="Discard all these photos? They won't be used, and you can generate new ones." />}
         </div>
       )}
       {images.length > 0 && (
@@ -51,6 +52,7 @@ export function ImagePanel({ businessId, connected, canEdit, images }: { busines
                 <p className="line-clamp-2">{im.slot}</p>
                 <Badge variant={im.status === "completed" ? "success" : im.status === "failed" ? "destructive" : "secondary"}>{im.status === "completed" ? "AI photo" : im.status}</Badge>
                 {im.error && <p className="text-destructive">{im.error}</p>}
+                {canEdit && <ActionButton action={discardImagesAction} hidden={{ businessId, imageId: im.id }} label="Discard" variant="ghost" />}
               </div>
             </li>
           ))}

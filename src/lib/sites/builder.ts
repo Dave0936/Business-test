@@ -127,7 +127,8 @@ export async function saveVersion(db: SupabaseClient, args: { organisationId: st
   // Template builds exist so the app can be tried without Claude. They can go to approval only
   // for fictional demo businesses; a real prospect's prototype must be built by Claude.
   const { data: biz } = await db.from("businesses").select("is_demo").eq("id", args.businessId).eq("organisation_id", args.organisationId).single();
-  const approvable = report.passed && (args.spec.generatedBy !== "demo" || Boolean(biz?.is_demo));
+  // A homepage draft is for agreeing the look; only the full site goes to approval.
+  const approvable = report.passed && (args.spec.generatedBy !== "demo" || Boolean(biz?.is_demo)) && args.spec.scope !== "home";
   if (approvable) {
     const { error: sErr } = await db.from("generated_websites").update({ status: "awaiting_approval" }).eq("id", args.websiteId).eq("organisation_id", args.organisationId);
     if (sErr) throw sErr;
@@ -136,7 +137,7 @@ export async function saveVersion(db: SupabaseClient, args: { organisationId: st
     .in("status", ["new", "researching", "qualified", "not_qualified", "prototype_generated", "awaiting_deployment_approval", "deployed"]);
   await db.from("crm_activities").insert({
     organisation_id: args.organisationId, business_id: args.businessId, type: "prototype_version",
-    summary: `${args.note} — quality checks ${report.passed ? "passed" : "failed"}${report.passed && !approvable ? " (demo build: not for approval)" : ""}`,
+    summary: `${args.note} — quality checks ${report.passed ? "passed" : "failed"}${report.passed && !approvable ? (args.spec.scope === "home" ? " (homepage draft: build the rest of the site to send it for approval)" : " (demo build: not for approval)") : ""}`,
     data: { website_id: args.websiteId, version_id: v.id, passed: report.passed, approvable }, actor_id: args.actorId ?? null,
   });
   return { versionId: v.id, report, approvable };
@@ -158,7 +159,7 @@ export async function recheckCurrentVersion(db: SupabaseClient, organisationId: 
   const { error: qErr } = await db.from("quality_reports").insert({ organisation_id: organisationId, website_id: websiteId, version_id: v.id, passed: report.passed, checks: report.checks });
   if (qErr) throw qErr;
   const isDemo = Boolean((site.businesses as unknown as { is_demo: boolean } | null)?.is_demo);
-  const approvable = report.passed && (spec.generatedBy !== "demo" || isDemo);
+  const approvable = report.passed && (spec.generatedBy !== "demo" || isDemo) && spec.scope !== "home";
   let status = site.status as string;
   if (approvable && ["generated", "quality_checked"].includes(status)) status = "awaiting_approval";
   else if (!approvable && status === "awaiting_approval") status = "generated";

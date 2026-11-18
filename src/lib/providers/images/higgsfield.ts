@@ -44,10 +44,17 @@ async function json<T>(res: Response, what: string): Promise<T> {
 }
 
 /** Build a safe prompt: generic scene, no text, logos or recognisable people. */
-export function imagePrompt(subject: string, style: string): string {
+/** Said on every prompt: the model must draw one photograph, never a layout or interface. */
+export const SINGLE_PHOTO = "One single photograph filling the whole frame. Not a collage, grid, mood board, website, screen or user interface; no panels, borders or frames. No text, lettering, logos, signage or brand names; no recognisable faces.";
+
+/**
+ * A photo prompt from a subject and (optionally) a photographic description written for it.
+ * Website layout notes from a brief must never be passed in here: the model would draw them.
+ */
+export function imagePrompt(subject: string, photo = ""): string {
   const clean = (s: string) => s.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
-  const base = `${clean(subject)}. ${clean(style)}. Editorial photograph, natural light, realistic. No text, no lettering, no logos, no signage, no brand names, no recognisable faces.`;
-  return base.slice(0, 800);
+  const body = clean(photo) || `${clean(subject)}. Realistic editorial photograph, natural light, tactile and slightly imperfect.`;
+  return `${body.slice(0, 800 - SINGLE_PHOTO.length - 2)} ${SINGLE_PHOTO}`;
 }
 
 export function requestBody(prompt: string, aspect: AspectRatio = "3:2"): ImageRequestBody {

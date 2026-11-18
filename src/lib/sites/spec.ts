@@ -70,6 +70,9 @@ export interface SiteSpec {
   /** Bespoke sites: page file names, the builder's summary and suggestions. */
   pages?: string[];
   summary?: string;
+  /** "home": a homepage draft (other pages are placeholders; not for approval). */
+  scope?: "home" | "full";
+  plannedPages?: { file: string; label: string }[];
   suggestions?: string[];
   theme: Theme;
   /** Verified facts only, copied from the business record by code. */

@@ -10,6 +10,8 @@ import {
 } from "@/lib/providers/images/higgsfield";
 import type { ResolvedImage } from "./spec";
 import { compressPhoto } from "./image-compress";
+import { aiAvailable } from "@/lib/ai/client";
+import { runPhotoPromptAgent } from "@/lib/ai/agents/creative-agents";
 
 export const MAX_IMAGES = 6;
 const BUCKET = "site-assets";
@@ -29,7 +31,9 @@ export async function planImages(db: SupabaseClient, org: string, businessId: st
   const have = new Set((done ?? []).map((d) => d.slot));
   return (brief.image_queries ?? [])
     .slice(0, MAX_IMAGES)
-    .map((q, i) => ({ slot: q, prompt: imagePrompt(q, brief.image_style ?? ""), aspect: (i === 0 ? "16:9" : "3:2") as AspectRatio }))
+    // The brief's image_style describes how images sit on the page (frames, sizes, counts):
+    // never send that to the photo model. Photographic prompts are written at start time.
+    .map((q, i) => ({ slot: q, prompt: imagePrompt(q), aspect: (i === 0 ? "16:9" : "3:2") as AspectRatio }))
     .filter((p) => !have.has(p.slot));
 }
 
@@ -62,6 +66,23 @@ export async function startImages(db: SupabaseClient, org: string, businessId: s
   if (!q.items.length) throw new Error("There are no photos left to generate for this brief.");
   if (q.totalUsd > quotedTotal * 1.2 + 0.01) throw new Error(`The price changed to $${q.totalUsd.toFixed(2)}. Check the new estimate and confirm again.`);
   const per = q.totalUsd / q.items.length;
+  // Claude turns each subject into a prompt for one real photograph in the brief's look.
+  if (aiAvailable()) {
+    try {
+      const [{ data: briefRow }, { data: studio }, { data: biz }] = await Promise.all([
+        db.from("design_briefs").select("brief").eq("business_id", businessId).eq("organisation_id", org).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        db.from("design_studios").select("creative_brief").eq("business_id", businessId).eq("organisation_id", org).maybeSingle(),
+        db.from("businesses").select("name, category, city").eq("id", businessId).eq("organisation_id", org).single(),
+      ]);
+      const b = briefRow?.brief as DesignBrief | undefined;
+      const look = [studio?.creative_brief ?? "", b ? `Mood: ${b.mood_words?.join(", ") ?? ""}. Palette: ${Object.values(b.palette ?? {}).join(", ")}. Photography notes: ${b.image_style ?? ""}` : ""].filter(Boolean).join("\n\n");
+      const r = await runPhotoPromptAgent({ db, organisationId: org, business: `${biz?.name ?? "a local business"}, ${biz?.category ?? ""}${biz?.city ? ` in ${biz.city}` : ""}`, look, subjects: q.items.map((it) => it.slot) });
+      const bySlot = new Map(r.output.prompts.map((p) => [p.slot, p.prompt]));
+      q.items = q.items.map((it) => (bySlot.get(it.slot) ? { ...it, prompt: imagePrompt(it.slot, bySlot.get(it.slot)) } : it));
+    } catch (e) {
+      console.error("photo prompts failed; using plain photo prompts", e);
+    }
+  }
   const { data, error } = await db.from("generated_images").insert(q.items.map((it) => ({
     organisation_id: org, business_id: businessId, slot: it.slot, prompt: it.prompt, aspect: it.aspect, status: "queued", quoted_usd: per, created_by: actorId,
   }))).select("id");
@@ -127,4 +148,13 @@ export async function generatedImagesFor(db: SupabaseClient, org: string, busine
     out[r.slot] = { src: `assets/generated/${r.id}.${ext}`, alt: r.slot, kind: "upload", storagePath: r.storage_path, credit: null, aiGenerated: true };
   }
   return out;
+}
+
+/** Set photos aside (bad or unwanted). They are never used, and their subjects can be generated again. */
+export async function discardImages(db: SupabaseClient, org: string, businessId: string, imageId: string | null): Promise<number> {
+  let q = db.from("generated_images").update({ status: "failed", error: "Discarded by our team" }, { count: "exact" }).eq("business_id", businessId).eq("organisation_id", org).in("status", ["completed", "failed", "queued"]);
+  if (imageId) q = q.eq("id", imageId);
+  const { error, count } = await q;
+  if (error) throw error;
+  return count ?? 0;
 }

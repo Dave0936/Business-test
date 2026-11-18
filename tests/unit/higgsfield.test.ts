@@ -11,9 +11,12 @@ const RID = "d7e6c0f3-6699-4f6c-bb45-2ad7fd9158ff";
 
 describe("Higgsfield image provider", () => {
   it("writes generic, safe prompts within the model's limit", () => {
-    const p = imagePrompt("bright cafe counter\nwith pastries", "Natural light, real settings");
-    expect(p).toMatch(/^bright cafe counter with pastries\. Natural light/);
-    expect(p).toMatch(/No text, no lettering, no logos/);
+    const plain = imagePrompt("bright cafe counter\nwith pastries");
+    expect(plain).toMatch(/^bright cafe counter with pastries\. Realistic editorial photograph/);
+    const p = imagePrompt("cafe counter", "A worn oak counter with pastries under morning window light, 35mm, warm grade.");
+    expect(p).toMatch(/^A worn oak counter/);
+    expect(p).toMatch(/One single photograph filling the whole frame\. Not a collage, grid, mood board, website, screen or user interface/);
+    expect(p).toMatch(/No text, lettering, logos/);
     expect(p).toMatch(/no recognisable faces/);
     expect(imagePrompt("x".repeat(2000), "y").length).toBeLessThanOrEqual(800);
     expect(requestBody("p", "16:9")).toEqual({ prompt: "p", resolution: "1k", aspect_ratio: "16:9", prompt_extend: false });

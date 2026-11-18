@@ -4,7 +4,7 @@ import { getOrgContext, roleAtLeast } from "@/lib/auth";
 import { guarded, kickWorker, str, type ActionState } from "@/lib/actions";
 import { enqueue } from "@/lib/jobs/queue";
 import { writeAudit } from "@/lib/audit-log";
-import { quoteImages, startImages } from "@/lib/sites/generated-images";
+import { discardImages, quoteImages, startImages } from "@/lib/sites/generated-images";
 
 export interface QuoteState extends ActionState {
   quote?: { count: number; totalUsd: number; slots: string[] };
@@ -36,5 +36,17 @@ export async function generateImagesAction(_p: ActionState, form: FormData): Pro
     await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "images.generation_started", entityType: "business", entityId: businessId, data: { count: r.ids.length, quoted_usd: r.totalUsd, provider: "higgsfield" } });
     kickWorker(ctx);
     return `Generating ${r.ids.length} photos (about $${r.totalUsd.toFixed(2)}). They appear here as they finish, and the next build uses them.`;
+  }, `/design-research/${id}`);
+}
+
+/** Set one photo (or all of them) aside. They are never used, and can be generated again. */
+export async function discardImagesAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  const id = str(form, "businessId");
+  return guarded("staff", async (ctx) => {
+    const businessId = z.string().uuid().parse(id);
+    const imageId = str(form, "imageId") ? z.string().uuid().parse(str(form, "imageId")) : null;
+    const n = await discardImages(ctx.supabase, ctx.organisationId, businessId, imageId);
+    await writeAudit(ctx.supabase, { organisationId: ctx.organisationId, actorId: ctx.user.id, action: "images.discarded", entityType: "business", entityId: businessId, data: { count: n } });
+    return n ? `Discarded ${n === 1 ? "the photo" : `${n} photos`}. Get a price to make ${n === 1 ? "it" : "them"} again.` : "Nothing to discard.";
   }, `/design-research/${id}`);
 }
