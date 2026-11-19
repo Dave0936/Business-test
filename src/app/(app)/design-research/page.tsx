@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Palette } from "lucide-react";
-import { getOrgContext, canWrite } from "@/lib/auth";
+import { getOrgContext, canApprove, canWrite } from "@/lib/auth";
+import { SelectionBar } from "@/components/app/selection-bar";
 import { PageHeader, EmptyState } from "@/components/app/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ActionForm } from "@/components/app/action-form";
@@ -17,7 +18,7 @@ import { designSearchLinks } from "@/lib/design/search-links";
 import { integrationStatus } from "@/lib/integrations";
 import type { DesignBrief } from "@/lib/design/brief";
 import { formatDate } from "@/lib/utils";
-import { addReference, saveBoardLinks } from "./actions";
+import { addReference, designSelectionAction, saveBoardLinks } from "./actions";
 import { getSecret } from "@/lib/integrations";
 import { listBoards, type Board } from "@/lib/providers/design/pinterest";
 
@@ -64,12 +65,18 @@ export default async function DesignResearchPage({ searchParams }: { searchParam
           <CardHeader><CardTitle>Design briefs</CardTitle></CardHeader>
           <CardContent>
             {latest.length ? (
+              <form>
+              {canApprove(ctx.role) && <div className="mb-1 rounded-md border"><SelectionBar action={designSelectionAction} name="businessId" ops={[
+                { op: "delete", label: "Delete design work", variant: "ghost", confirm: "Delete the design work for {n} business(es): every brief version, the studio (creative brief, picks, answers) and the references added for them? Prototypes and AI photos are kept." },
+                { op: "prune", label: "Remove older brief versions", noSelection: true, confirm: "Remove older brief versions, keeping the latest for each business (and any a prototype was built from)?" },
+              ]} /></div>}
               <ul className="divide-y">
                 {latest.map((b) => {
                   const brief = b.brief as DesignBrief;
                   const biz = b.businesses as unknown as { name: string; is_demo: boolean; industry_id: string | null };
                   return (
                     <li key={b.id} className="flex flex-wrap items-center gap-3 py-3">
+                      {canApprove(ctx.role) && <input type="checkbox" name="businessId" value={b.business_id} aria-label={`Select ${biz.name}`} className="size-4" />}
                       <div className="flex gap-1" aria-hidden>{[brief.palette.primary, brief.palette.accent, brief.palette.secondary, brief.palette.background].map((c) => <span key={c} className="size-5 rounded border" style={{ background: c }} />)}</div>
                       <div className="min-w-0 flex-1">
                         <Link href={`/design-research/${b.business_id}`} className="font-medium hover:underline">{biz.name}</Link> <DemoBadge show={biz.is_demo} />
@@ -81,6 +88,7 @@ export default async function DesignResearchPage({ searchParams }: { searchParam
                   );
                 })}
               </ul>
+              </form>
             ) : <EmptyState icon={Palette} title="No briefs yet">Open a design studio for a qualified lead below, or let automation create briefs for qualified leads.</EmptyState>}
             {qualified && qualified.length > 0 && (
               <div className="mt-4 border-t pt-4">

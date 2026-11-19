@@ -1,6 +1,7 @@
 "use server";
 import { z } from "zod";
 import { guarded, str, type ActionState } from "@/lib/actions";
+import { UPLOAD_BUCKET } from "@/lib/design/studio";
 import { assertSafeUrl } from "@/lib/security/safe-fetch";
 
 const RefSchema = z.object({
@@ -62,4 +63,29 @@ export async function saveBoardLinks(_p: ActionState, form: FormData): Promise<A
     }
     return `Saved: ${saved} sector${saved === 1 ? "" : "s"} linked to a board.`;
   }, "/design-research");
+}
+
+/** Delete the selected businesses' design work, or older brief versions. Owners and administrators. */
+export async function designSelectionAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("administrator", async (ctx) => {
+    const op = z.enum(["delete", "prune"]).parse(str(form, "op"));
+    if (op === "prune") {
+      const { data, error } = await ctx.supabase.rpc("prune_history", { p_org: ctx.organisationId, p_kind: "briefs" });
+      if (error) throw new Error(error.message);
+      return data ? `Removed ${data} older brief version${data === 1 ? "" : "s"}. Each business keeps its latest.` : "Nothing to remove: each business has only its latest brief.";
+    }
+    const ids = form.getAll("businessId").map(String).filter((x) => z.string().uuid().safeParse(x).success);
+    if (!ids.length) throw new Error("Select at least one business.");
+    let done = 0;
+    const kept: string[] = [];
+    for (const id of ids.slice(0, 100)) {
+      const { data, error } = await ctx.supabase.rpc("delete_design_work", { p_business: id });
+      if (error) { kept.push(error.message); continue; }
+      done++;
+      const paths = (data as string[] | null) ?? [];
+      // Uploaded pictures are removed from storage too (best effort: a leftover file is harmless).
+      if (paths.length) await ctx.supabase.storage.from(UPLOAD_BUCKET).remove(paths.filter((p) => p.startsWith(`${ctx.organisationId}/`)));
+    }
+    return `Deleted the design work for ${done} business${done === 1 ? "" : "es"}.${kept.length ? ` ${kept.length} kept (${kept[0]}).` : ""}`;
+  }, ["/design-research"]);
 }

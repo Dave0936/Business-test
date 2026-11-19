@@ -24,6 +24,12 @@ begin
   if not has_function_privilege('authenticated', 'public.purge_business(uuid)', 'execute') then raise exception 'purge_business missing'; end if;
   if not has_function_privilege('anon', 'public.unsubscribe_with_token(text, text)', 'execute') then raise exception 'unsubscribe_with_token missing for anon'; end if;
   if not has_function_privilege('anon', 'public.unsubscribe_token_info(text)', 'execute') then raise exception 'unsubscribe_token_info missing for anon'; end if;
+  if has_function_privilege('anon', 'public.delete_website(uuid)', 'execute') then raise exception 'delete_website exposed to anon'; end if;
+  if not has_function_privilege('authenticated', 'public.delete_website(uuid)', 'execute') then raise exception 'delete_website missing'; end if;
+  if has_function_privilege('anon', 'public.delete_design_work(uuid)', 'execute') then raise exception 'delete_design_work exposed to anon'; end if;
+  if not has_function_privilege('authenticated', 'public.delete_design_work(uuid)', 'execute') then raise exception 'delete_design_work missing'; end if;
+  if has_function_privilege('anon', 'public.prune_history(uuid, text)', 'execute') then raise exception 'prune_history exposed to anon'; end if;
+  if not has_function_privilege('authenticated', 'public.prune_history(uuid, text)', 'execute') then raise exception 'prune_history missing'; end if;
   if not has_function_privilege('service_role', 'public.claim_jobs(text, int)', 'execute') then raise exception 'worker cannot claim'; end if;
 end $$;
 \echo 'ALL FUNCTION PRIVILEGE TESTS PASSED'

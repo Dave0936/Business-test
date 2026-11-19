@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getOrgContext, canWrite } from "@/lib/auth";
+import { getOrgContext, canApprove, canWrite } from "@/lib/auth";
 import { PageHeader } from "@/components/app/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -15,7 +15,7 @@ import type { QaCheck } from "@/lib/qa/checks";
 import type { SiteFiles, SiteSpec } from "@/lib/sites/spec";
 import { formatDate } from "@/lib/utils";
 import { PreviewFrame } from "./preview-frame";
-import { buildRestAction, buildSiteAction, restoreVersion, reviseMotionAction, reviseSiteAction, stopBuildAction } from "../actions";
+import { buildRestAction, buildSiteAction, deleteWebsiteAction, restoreVersion, reviseMotionAction, reviseSiteAction, stopBuildAction } from "../actions";
 import { recheckWebsiteAction } from "../../approvals/actions";
 import { DECISION_LABEL, notReadyReason, type Decision } from "@/lib/approvals/review";
 
@@ -169,7 +169,7 @@ export default async function WebsitePage({ params }: { params: Promise<{ id: st
             )}
 
             <Card>
-              <CardHeader><CardTitle>Versions</CardTitle></CardHeader>
+              <CardHeader className="flex-row items-center justify-between gap-3 space-y-0"><CardTitle>Versions</CardTitle>{canApprove(ctx.role) && !active && <ActionButton action={deleteWebsiteAction} hidden={{ websiteId: id }} label="Delete prototype" variant="ghost" confirm={`Delete this prototype for ${biz.name}, with every version and build? Approval decisions stay in the history. This can't be undone.`} />}</CardHeader>
               <CardContent>
                 <ul className="divide-y text-sm" data-testid="versions">
                   {versions?.map((v) => (

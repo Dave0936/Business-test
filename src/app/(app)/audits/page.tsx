@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ClipboardCheck } from "lucide-react";
-import { getOrgContext } from "@/lib/auth";
+import { canApprove, getOrgContext } from "@/lib/auth";
+import { SelectionBar } from "@/components/app/selection-bar";
+import { auditsSelectionAction } from "./actions";
 import { PageHeader, EmptyState } from "@/components/app/page-header";
 import { FilterBar, parseFilters } from "@/components/app/filters";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -25,21 +27,27 @@ export default async function AuditsPage({ searchParams }: { searchParams: Promi
   if (f.minScore) q = q.gte("businesses.lead_score", Number(f.minScore));
   const { data: audits, error } = await q.order("created_at", { ascending: false }).limit(200);
   if (error) throw error;
+  const admin = canApprove(ctx.role);
 
   return (
     <>
       <PageHeader title="Website Audits" description="Every audit separates what our crawler measured from what AI thinks. The opportunity score comes only from weighted, explained criteria." />
       <FilterBar values={f} />
       {audits?.length ? (
-        <div className="rounded-xl border bg-card">
+        <form className="rounded-xl border bg-card">
+          {admin && <SelectionBar action={auditsSelectionAction} name="auditId" ops={[
+            { op: "delete", label: "Delete", variant: "ghost", confirm: "Delete {n} audit(s)? Lead scores are kept." },
+            { op: "prune", label: "Remove older audits", noSelection: true, confirm: "Remove every older audit, keeping the latest for each business?" },
+          ]} />}
           <Table>
-            <TableHeader><TableRow><TableHead>Business</TableHead><TableHead>Website</TableHead><TableHead className="text-right">Site quality</TableHead><TableHead className="text-right">Opportunity</TableHead><TableHead>Type</TableHead><TableHead>Top problem</TableHead><TableHead>Method</TableHead><TableHead>When</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow>{admin && <TableHead className="w-8"><span className="sr-only">Select</span></TableHead>}<TableHead>Business</TableHead><TableHead>Website</TableHead><TableHead className="text-right">Site quality</TableHead><TableHead className="text-right">Opportunity</TableHead><TableHead>Type</TableHead><TableHead>Top problem</TableHead><TableHead>Method</TableHead><TableHead>When</TableHead></TableRow></TableHeader>
             <TableBody>
               {audits.map((a) => {
                 const b = a.businesses as unknown as { id: string; name: string; opportunity_type: string; lead_score: number | null; is_demo: boolean };
                 const top = (a.problems as { title: string }[])[0];
                 return (
                   <TableRow key={a.id}>
+                    {admin && <TableCell><input type="checkbox" name="auditId" value={a.id} aria-label={`Select the audit of ${b.name}`} className="size-4" /></TableCell>}
                     <TableCell><Link href={`/audits/${a.id}`} className="font-medium hover:underline">{b.name}</Link> <DemoBadge show={b.is_demo} /></TableCell>
                     <TableCell className="max-w-48 truncate text-sm">{a.url ? a.url.replace(/^https?:\/\/(www\.)?/, "") : <span className="text-muted-foreground">No website</span>}</TableCell>
                     <TableCell className="text-right">{a.audit_score ?? "—"}</TableCell>
@@ -53,7 +61,7 @@ export default async function AuditsPage({ searchParams }: { searchParams: Promi
               })}
             </TableBody>
           </Table>
-        </div>
+        </form>
       ) : <EmptyState icon={ClipboardCheck} title="No audits yet">Audits run automatically after a search, or from a lead’s page.</EmptyState>}
     </>
   );

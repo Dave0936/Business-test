@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LEAD_STATUSES, humanise, industryById } from "@/lib/industries";
 import { formatDate } from "@/lib/utils";
-import { BulkBar } from "./bulk-bar";
+import { SelectionBar } from "@/components/app/selection-bar";
+import { leadsSelectionAction } from "./actions";
 
 export const metadata: Metadata = { title: "Business Leads" };
 
@@ -39,12 +40,17 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PageHeader title="Business Leads" description={`${count ?? 0} businesses. Select rows to audit, research or generate prototypes in bulk.`} actions={<><Button variant="ghost" asChild><Link href="/leads/bin">Recycle bin</Link></Button><Button variant="outline" asChild><a href={`/api/export/leads?${new URLSearchParams(sp)}`}>Export CSV</a></Button><Button asChild><Link href="/opportunities">Find more</Link></Button></>} />
+      <PageHeader title="Business Leads" description={`${count ?? 0} businesses. Select rows to audit, research, generate prototypes or move to the recycle bin in bulk.`} actions={<><Button variant="ghost" asChild><Link href="/leads/bin">Recycle bin</Link></Button><Button variant="outline" asChild><a href={`/api/export/leads?${new URLSearchParams(sp)}`}>Export CSV</a></Button><Button asChild><Link href="/opportunities">Find more</Link></Button></>} />
       {sp.binned && <Alert variant="success" className="mb-4"><AlertDescription>Moved to the <Link href="/leads/bin" className="font-medium underline">recycle bin</Link>. You can restore it there for 30 days.</AlertDescription></Alert>}
       <FilterBar values={f} showStatus statuses={LEAD_STATUSES} showSearch />
       {rows && rows.length ? (
         <form id="bulk" className="rounded-xl border bg-card">
-          {canWrite(ctx.role) && <BulkBar />}
+          {canWrite(ctx.role) && <SelectionBar action={leadsSelectionAction} name="businessId" ops={[
+            { op: "audit", label: "Audit & score" },
+            { op: "research", label: "Research design" },
+            { op: "generate", label: "Generate prototype" },
+            { op: "bin", label: "Move to recycle bin", variant: "ghost", confirm: "Move {n} lead(s) to the recycle bin? Their audits, designs and prototypes are hidden with them, and nothing is sent to them. You can restore them for 30 days." },
+          ]} />}
           <Table>
             <TableHeader>
               <TableRow>

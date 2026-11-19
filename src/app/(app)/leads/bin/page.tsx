@@ -8,7 +8,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ActionButton } from "@/components/app/action-button";
 import { DemoBadge } from "@/components/app/badges";
 import { formatDate } from "@/lib/utils";
-import { purgeLeadAction, restoreLeadAction } from "./actions";
+import { SelectionBar, type SelectionOp } from "@/components/app/selection-bar";
+import { binSelectionAction, purgeLeadAction, restoreLeadAction } from "./actions";
 
 export const metadata: Metadata = { title: "Recycle bin" };
 
@@ -33,6 +34,17 @@ export default async function BinPage() {
       <PageHeader title="Recycle bin" description={`Leads moved to the bin are hidden everywhere and nothing is sent to them. They are deleted permanently, with everything about them, ${BIN_DAYS} days after they were binned.`} actions={<Link href="/leads" className="text-sm text-primary hover:underline">Back to leads</Link>} />
       {leads?.length ? (
         <Card>
+          {staff && (
+            <form id="bin-select">
+              <SelectionBar action={binSelectionAction} name="businessId" ops={[
+                { op: "restore", label: "Restore" },
+                ...(admin ? [
+                  { op: "purge", label: "Delete permanently", variant: "ghost", confirm: "Delete {n} lead(s) permanently, with their audits, designs, prototypes, emails and activity? This can't be undone." },
+                  { op: "empty", label: "Empty the bin", variant: "ghost", noSelection: true, confirm: "Delete every lead in the recycle bin permanently? This can't be undone." },
+                ] satisfies SelectionOp[] : []),
+              ]} />
+            </form>
+          )}
           <CardContent>
             <ul className="divide-y" data-testid="bin">
               {leads.map((b) => {
@@ -40,9 +52,12 @@ export default async function BinPage() {
                 const purgeOn = new Date(new Date(b.deleted_at!).getTime() + BIN_DAYS * 86400_000);
                 return (
                   <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
+                    <div className="flex min-w-0 items-start gap-3">
+                      {staff && <input type="checkbox" form="bin-select" name="businessId" value={b.id} aria-label={`Select ${b.name}`} className="mt-1 size-4" />}
+                      <div className="min-w-0">
                       <p className="flex flex-wrap items-center gap-2 font-medium">{b.name}<DemoBadge show={b.is_demo} /></p>
                       <p className="text-xs text-muted-foreground">{b.city ?? "—"}, {b.country_code} · binned {formatDate(b.deleted_at!, true)}{who ? ` by ${who.full_name ?? who.email}` : ""} · deleted for good on {formatDate(purgeOn.toISOString())}</p>
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {staff && <ActionButton action={restoreLeadAction} hidden={{ businessId: b.id }} label="Restore" variant="outline" />}

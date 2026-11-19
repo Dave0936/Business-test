@@ -36,6 +36,34 @@ export async function queueAction(_p: ActionState, form: FormData): Promise<Acti
   }, ["/leads", "/audits"]);
 }
 
+/** The Leads selection bar: queue work for the selected leads, or move them to the bin. */
+export async function leadsSelectionAction(p: ActionState, form: FormData): Promise<ActionState> {
+  const op = str(form, "op");
+  if (op !== "bin") {
+    form.set("type", op);
+    return queueAction(p, form);
+  }
+  return guarded("staff", async (ctx) => {
+    const ids = form.getAll("businessId").map(String).filter((x) => ID.safeParse(x).success);
+    if (!ids.length) throw new Error("Select at least one business.");
+    const { binned, problems } = await binMany(ctx, ids);
+    return [binned ? `Moved ${binned} to the recycle bin. You can restore them there for 30 days.` : "", ...problems].filter(Boolean).join(" ");
+  }, ["/leads", "/leads/bin", "/overview", "/opportunities", "/audits", "/design-research", "/builder"]);
+}
+
+async function binMany(ctx: OrgContext, ids: string[]) {
+  let binned = 0;
+  const problems: string[] = [];
+  for (const id of ids.slice(0, 200)) {
+    const { data, error } = await ctx.supabase.rpc("bin_business", { p_business: id });
+    if (error) {
+      const { data: b } = await ctx.supabase.from("businesses").select("name").eq("id", id).maybeSingle();
+      problems.push(`${b?.name ?? "One lead"} was kept: ${error.message}.`);
+    } else if (data) binned++;
+  }
+  return { binned, problems: problems.slice(0, 3).concat(problems.length > 3 ? [`${problems.length - 3} more were kept.`] : []) };
+}
+
 const UpdateSchema = z.object({
   id: z.string().uuid(),
   status: z.enum(LEAD_STATUSES).optional(),

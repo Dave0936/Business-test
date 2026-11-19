@@ -1,6 +1,7 @@
 "use server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { redirect } from "next/navigation";
 import { motionInstruction } from "@/lib/sites/bespoke/motion";
 import { guarded, kickWorker, str, type ActionState } from "@/lib/actions";
 import { SiteContentSchema, ThemeSchema, type SiteFiles, type SiteSpec } from "@/lib/sites/spec";
@@ -190,4 +191,37 @@ export async function buildRestAction(_p: ActionState, form: FormData): Promise<
     kickWorker(ctx);
     return "Building the rest of the site in the homepage's design. The full site goes to approval when it passes its checks.";
   }, "/builder");
+}
+
+async function deleteSites(ctx: OrgContext, ids: string[]) {
+  let done = 0;
+  const kept: string[] = [];
+  for (const id of ids.slice(0, 100)) {
+    const { data, error } = await ctx.supabase.rpc("delete_website", { p_website: id });
+    if (error) kept.push(error.message);
+    else if (data) done++;
+  }
+  return { done, kept };
+}
+
+/** Delete the selected prototypes with all their versions. Owners and administrators. */
+export async function builderSelectionAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  return guarded("administrator", async (ctx) => {
+    const ids = form.getAll("websiteId").map(String).filter((x) => z.string().uuid().safeParse(x).success);
+    if (!ids.length) throw new Error("Select at least one prototype.");
+    const { done, kept } = await deleteSites(ctx, ids);
+    return `Deleted ${done} prototype${done === 1 ? "" : "s"}.${kept.length ? ` ${kept.length} kept (${kept[0]}).` : ""}`;
+  }, ["/builder", "/approvals", "/leads", "/overview"]);
+}
+
+export async function deleteWebsiteAction(_p: ActionState, form: FormData): Promise<ActionState> {
+  let done = false;
+  const r = await guarded("administrator", async (ctx) => {
+    const id = z.string().uuid().parse(str(form, "websiteId"));
+    const { kept } = await deleteSites(ctx, [id]);
+    if (kept.length) throw new Error(`Not deleted: ${kept[0]}.`);
+    done = true;
+  }, ["/builder", "/approvals", "/leads", "/overview"]);
+  if (done) redirect("/builder?deleted=1");
+  return r;
 }

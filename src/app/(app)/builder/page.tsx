@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Wand2 } from "lucide-react";
-import { getOrgContext } from "@/lib/auth";
+import { canApprove, getOrgContext } from "@/lib/auth";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { SelectionBar } from "@/components/app/selection-bar";
+import { builderSelectionAction } from "./actions";
 import { PageHeader, EmptyState } from "@/components/app/page-header";
 import { DemoBadge, StatusBadge } from "@/components/app/badges";
 import { Badge } from "@/components/ui/badge";
@@ -11,8 +14,10 @@ import { formatDate } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "AI Website Builder" };
 
-export default async function BuilderPage() {
+export default async function BuilderPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
+  const { deleted } = await searchParams;
   const ctx = await getOrgContext();
+  const admin = canApprove(ctx.role);
   const { data: sites, error } = await ctx.supabase
     .from("generated_websites")
     .select("id, status, updated_at, current_version_id, businesses!inner(name, is_demo, city), website_versions!generated_websites_current_version_fk(version, spec, generated_by), quality_reports(passed, created_at, version_id)")
@@ -24,6 +29,14 @@ export default async function BuilderPage() {
   return (
     <>
       <PageHeader title="AI Website Builder" description="Bespoke prototypes written by Claude from each business’s verified details and design brief. Every build and revision is a new version, checked before it can be approved." actions={<Button variant="outline" asChild><Link href="/design-research">Start from a design studio</Link></Button>} />
+      {deleted && <Alert variant="success" className="mb-4"><AlertDescription>Prototype deleted.</AlertDescription></Alert>}
+      {sites?.length && admin ? (
+        <form id="sites-select" className="mb-4 rounded-xl border bg-card">
+          <SelectionBar action={builderSelectionAction} name="websiteId" label="Select prototypes to delete" ops={[
+            { op: "delete", label: "Delete", variant: "ghost", confirm: "Delete {n} prototype(s) with every version and build? Anything online must be taken offline first. This can't be undone." },
+          ]} />
+        </form>
+      ) : null}
       {sites?.length ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {sites.map((s) => {
@@ -31,7 +44,9 @@ export default async function BuilderPage() {
             const b = s.businesses as unknown as { name: string; is_demo: boolean; city: string | null };
             const qa = (s.quality_reports as { passed: boolean; version_id: string; created_at: string }[]).filter((q) => q.version_id === s.current_version_id).sort((a, c) => c.created_at.localeCompare(a.created_at))[0];
             return (
-              <Link key={s.id} href={`/builder/${s.id}`} className="group overflow-hidden rounded-xl border bg-card shadow-xs transition hover:border-primary/40">
+              <div key={s.id} className="relative">
+              {admin && <input type="checkbox" form="sites-select" name="websiteId" value={s.id} aria-label={`Select ${b.name}`} className="absolute right-3 top-3 z-10 size-5 accent-primary" />}
+              <Link href={`/builder/${s.id}`} className="group block overflow-hidden rounded-xl border bg-card shadow-xs transition hover:border-primary/40">
                 <div className="h-28 border-b" style={v ? { background: `linear-gradient(135deg, ${v.spec.theme.colors.primary}, ${v.spec.theme.colors.accent})` } : undefined}>
                   {v && <div className="flex h-full flex-col justify-end p-4 text-white"><p className="text-lg font-semibold leading-tight drop-shadow" style={{ fontFamily: v.spec.theme.fonts.heading }}>{b.name}</p><p className="text-xs opacity-90">{v.spec.theme.fonts.heading} · {v.spec.content?.pages.length ?? v.spec.pages?.length ?? 0} pages</p></div>}
                 </div>
@@ -40,6 +55,7 @@ export default async function BuilderPage() {
                   <p className="text-xs text-muted-foreground">Version {v?.version ?? "—"} · updated {formatDate(s.updated_at, true)}</p>
                 </div>
               </Link>
+              </div>
             );
           })}
         </div>
